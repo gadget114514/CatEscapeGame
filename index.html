@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' ws://localhost:5173 http://localhost:5173"
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Cat Escape</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+    <div id="hud">
+      <div id="top-bar">
+        <div class="control">
+          <label id="mode-label" for="mode-select">モード</label>
+          <select id="mode-select">
+            <option value="trapper">ねこをつかまえる</option>
+            <option value="escape">ねことしてにげる</option>
+          </select>
+        </div>
+        <div class="control">
+          <label id="diff-label" for="difficulty-select">難易度</label>
+          <select id="difficulty-select">
+            <option value="easy">やさしい</option>
+            <option value="normal">ふつう</option>
+            <option value="hard">むずかしい</option>
+          </select>
+        </div>
+        <button id="new-game-btn" type="button">あたらしいゲーム</button>
+        <div class="control checkbox-control">
+          <input type="checkbox" id="hint-checkbox" />
+          <label id="hint-label" for="hint-checkbox">ルートを表示</label>
+        </div>
+      </div>
+      <div id="status-line"></div>
+    </div>
+    <div id="result-modal">
+      <div id="result-card">
+        <p id="result-text"></p>
+        <p id="result-moves"></p>
+        <button id="play-again-btn" type="button">もういちど</button>
+      </div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

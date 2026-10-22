@@ -96,6 +96,7 @@ Shared rules: the AI is a **pure function** taking `(state, rng)` and returning 
 ### 5.1 Cat AI (`src/game/catAI.js`): `chooseCatMove(state, rng) → index`
 Common first step: `moves = legalCatMoves`. If a move lands on an edge cell, take it immediately.
 **If the cat is already enclosed** (`dist[cat]==-1`), every level picks the move with the largest `reachableArea` after moving, to survive as long as possible.
+The area is measured **with the cat's old cell treated as blocked** (so stepping into a dead-end pocket scores lower than staying in the big region); ties are broken by more `emptyNeighbors` of the destination, then at random. (Rev. 2: measuring with the old cell passable gives the same value for every move.)
 
 | Level | Algorithm |
 |---|---|
@@ -187,6 +188,24 @@ flashInvalid(i)
   `POINTERTAP` → `controller.onCellClicked(index)`. Ignore drags (camera rotation). Works for both touch and mouse.
 - **view.js**: brings the above together into the View interface.
 
+### 7.1 Rev. 3: fixes from the designer's browser test
+- **Camera auto-fit** (`fitCamera(camera, engine, boardExtent)` in scene.js). The fixed radius=22 cuts off the board at 4:3 and
+  shows only a third of it at phone width (375×812). On startup and on every resize:
+  compute the board's half-width `hx` and half-depth `hz` from `cellCenter` (+1 cell of margin), then
+  `vFov = camera.fov`, `hFov = 2*atan(tan(vFov/2)*aspect)`, and
+  `radius = max(hz / sin(vFov/2) , hx / sin(hFov/2)) * 1.05` (tilt is ignored; the factor covers it).
+  Set `lowerRadiusLimit = radius*0.7`, `upperRadiusLimit = radius*1.6`. Account for the HUD: shift `camera.target.z`
+  so the board is centered in the area below the top bar (approximation is fine).
+- **Lighting is blown out** (edge cells render white, the hint looks yellow like hover). `HemisphericLight` intensity 0.55 with
+  `groundColor #404850`, `DirectionalLight` intensity 0.35. All cell materials: `specularColor` black, `emissiveColor = diffuse*0.15`.
+  Colors: `empty #7cc576`, `border #b5dba8`, `hint #ff7a1a` (clearly orange), `hover #ffe066` unchanged.
+  When a hint cell is also a highlight cell, show the highlight color (the cell can be clicked) with the hint as a thin orange
+  outline ring (a slightly larger flat cylinder under the cell is fine).
+- **Cat is too small**: the whole cat TransformNode is scaled 1.4×; it must stay within one cell.
+- **Japanese strings**: mode label "ねこににげる" is wrong. Use "ねこをつかまえる" / "ねことしてにげる".
+- **Accessibility**: every form control has a `<label for>` (the hint checkbox currently reads as "on").
+- **Dev hook**: when `import.meta.env.DEV`, expose `window.__catescape = { controller, view }` for automated play-testing.
+
 ## 8. HUD / UI (`src/ui/hud.js`, `src/ui/strings.js`, `index.html`, `src/style.css`)
 - DOM overlay on top of a full-screen canvas.
   - Top bar: Mode `<select>` (Trap the Cat / Cat Escape), Difficulty `<select>`, `New Game` button, "Show path hint" checkbox
@@ -257,4 +276,187 @@ ES modules, 2-space indent, JSDoc types, no TypeScript. No external asset files 
   4. `npm run electron` → the same play works in the desktop app
 
 ## Implementation notes
-(opencode adds any decisions not covered by the spec here)
+Decisions made by opencode while implementing tasks 1–7 (not covered, or only
+partially covered, by the spec above):
+
+- **Candidate module** — `trapperCandidates(board, K)` lives in
+  `src/game/candidates.js` and is re-exported from `src/game/trapperAI.js`.
+  `search.js` imports it from `candidates.js`, so there is no
+  `search.js ↔ trapperAI.js` circular import.
+- **cellCenter offsets** — `cellCenter(r, c, size, gap, offsetX = 0, offsetZ = 0)`
+  keeps the documented 4-argument call working and accepts optional offsets.
+  The spec formula cannot center a board without knowing W/H, so the renderer
+  (task 8) computes them: `offsetX = (size*√3 + gap) * (W - 0.5) / 2`,
+  `offsetZ = (size*1.5 + gap*0.866) * (H - 1) / 2`.
+- **alphaBeta K for Hard** — the cat's Hard search passes `K = 10` for the
+  trapper side too (the spec only fixes K=10 for the trapper Hard search).
+- **Controller highlights** — `view.setHighlights(legalCatMoves)` in escape
+  mode, `view.setHighlights([])` in trapper mode (per the view interface in
+  section 6), so the view never needs to know the mode.
+- **hud.setStatus text** — the controller passes plain English strings
+  (`'Your turn'`, `'Thinking...'`); `strings.js` localization is the HUD's
+  job via `setTurn`/`showResult` (or it may ignore `setStatus`).
+- **AI edge cases** — `chooseCatMove` returns `-1` when the cat has no legal
+  move and `chooseBlock` returns `-1` when there is nothing to block; the
+  controller only invokes the AIs while `status === 'playing'`.
+- **RNG streams** — `newGame` uses its own `mulberry32(seed)` for initial
+  block placement; the controller creates `rngFactory(state.seed)` once per
+  game for AI decisions. Both are reproducible from the seed shown in the HUD.
+- **moveCount** — always `history.length` (one increment per action, either side).
+- **Enclosed cat (section 5.1, Rev. 2)** — when `dist[cat] == -1`,
+  `chooseCatMove` scores each move by `reachableArea` computed on a clone
+  where the cat's OLD cell is blocked (so stepping into a dead-end pocket
+  scores lower); ties are broken by more `emptyNeighbors` of the
+  destination, then at random. `evalForCat` (section 5.3) still uses the
+  plain `reachableArea` (the spec did not change there). Background: with
+  the old cell passable every legal move yields the same area, which is why
+  Rev. 2 measures with the old cell blocked.
+- **Initial block generation** — every one of the 100 retries re-randomizes
+  the whole placement; after 100 failed attempts the block count is reduced
+  by 1 (floor 0) and it retries.
+- **distanceMap details** — sources are edge cells that are not blocked (the
+  cat's cell counts as empty because it is never blocked); BFS traverses
+  non-blocked cells, so the cat's own cell is passable. Blocked and
+  unreachable cells → `dist = -1`, `paths = 0`.
+- **Vitest config** — `test.passWithNoTests: true` so `npm test` is green
+  during the scaffold task (0 tests).
+- **Alpha-beta win bonus** — terminal nodes return `±(10000 + depth)` where
+  `depth` is the remaining ply count, checked before the depth-0 base
+  evaluation; internal nodes only run the cheap terminal checks (cat on edge /
+  no cat moves) and a full `evalForCat` at leaves. Hard < 100 ms is asserted
+  in `test/catAI.test.js` and `test/trapperAI.test.js` on realistic mid-game
+  boards (initial Hard blocks + 20 more, escape route preserved).
+- **apply\* guards** — `applyBlock`/`applyCatMove` also throw when
+  `status !== 'playing'` (moves after game over are illegal), and validate
+  the index range before touching the typed array.
+- **First move** — as specified in section 1, the player always moves first
+  (trapper in trapper mode, cat in escape mode), so `start()` enters phase
+  `'player'` in both modes; the `'ai'` branch of the start diagram remains in
+  the controller for generality.
+- **catAI Easy** — "smallest dist, ties broken at random" only (the `paths`
+  tie-break belongs to Normal); the 30% random roll happens before that.
+
+Decisions made by opencode while implementing tasks 8–11 (rendering, HUD,
+Electron, Pages):
+
+- **Tree-shaking side-effect imports** — the render layer uses per-module
+  `@babylonjs/core/...` imports (no barrel) plus the side effects Babylon
+  needs in tree-shaken bundles: `@babylonjs/core/Culling/ray.js`
+  (`scene.pick`), `@babylonjs/core/Animations/animatable.js`
+  (`Animation.CreateAndStartAnimation`), and
+  `@babylonjs/core/Events/pointerEvents.js` (`onPointerObservable` /
+  `PointerEventTypes`). Meshes are built with direct builder imports
+  (`Meshes/Builders/sphereBuilder.js`, `Meshes/Builders/cylinderBuilder.js`)
+  instead of the `MeshBuilder` barrel (which drags in every builder); the
+  spec's `MeshBuilder.CreateCylinder` calls are equivalent `CreateCylinder`
+  calls with an explicit `scene`. All lights/cameras/materials/TransformNode
+  get real `Vector3`/`Color3`/`Color4` instances and an explicit `scene`
+  argument (plain `{x,y,z}` objects break lights — `direction.scale` at the
+  first render). The cat's ears are cones built as
+  `CreateCylinder({diameterTop: 0, ...})` — Babylon has no `CreateCone`.
+- **Materials** — every shared `StandardMaterial` gets a small emissive
+  component (0.15–0.7 × the diffuse color) so the palette stays readable
+  under the two spec lights; `specularColor` is black. Blocked cells are
+  raised to `y = 0.225` (half the extra height) so their base stays on the
+  board plane while `scaling.y` goes 1 → 2.5.
+- **catView** — the cat root sits at `y = 0.1` (body rests on the 0.15-high
+  cell top); hop (250 ms), catWin run-off (700 ms, 3 cells outward from the
+  edge while fading) and trapperWin sit (shake 3×, then `scaling.y = 0.8`)
+  share one `scene.onBeforeRenderObservable` driver using
+  `engine.getDeltaTime()`. All cat meshes are `isPickable = false` so taps
+  fall through to the cells.
+- **Picking** — hover highlights empty cells only while `phase === 'player'`;
+  taps ignore drags that moved more than 10 px (camera rotation), and illegal
+  taps are reported through the controller's `flashInvalid`. A shared red
+  material flashes for 150 ms.
+- **Hint wiring** — `view.setHintEnabled(on)` is an extra (non-injected)
+  method: while enabled the view recomputes `shortestPathToEdge(state.board)`
+  after every move animation and clears the hint on game result. The
+  controller API is unchanged; the HUD checkbox only calls
+  `view.setHintEnabled`.
+- **shortestPathToEdge(board)** — pure helper in `src/game/board.js`; walks
+  the distance map greedily (first neighbor with `dist-1`, deterministic),
+  returns `null` when the cat is enclosed.
+- **HUD texts** — built from `setTurn` + `controller.state.moveCount` +
+  seed and localized via `strings.js` (ja default, en when
+  `navigator.language` starts with `en`); the controller's English
+  `setStatus` text is intentionally ignored (API kept for compatibility).
+  `showResult` maps `(status, mode)` to the four result strings from
+  section 8. Settings are stored under the `catescape.settings` key.
+- **HUD controls** — mode/difficulty changes, New Game and Play again all
+  call `controller.start` with a fresh seed (`Date.now()` default); the
+  result modal is hidden on start.
+- **index.html / style.css** — the HUD container is `pointer-events: none`
+  (only the controls capture events, so drags elsewhere rotate the camera);
+  `#top-bar` uses `flex-wrap`, and the ≤480 px media query keeps the bar
+  usable (wraps onto two lines) down to 360 px phone width.
+- **Electron** — the application menu is hidden
+  (`Menu.setApplicationMenu(null)`); on macOS the `activate` hook recreates
+  the window. electron-builder config lives in the `build` section of
+  package.json (appId `com.gadget114514.catescape`, nsis).
+- **Pages workflow** — `pages.yml` runs on push to `main`: checkout@v4,
+  setup-node@v4 (Node 20, npm cache), `npm ci`, `npm test`,
+  `npm run build`, `upload-pages-artifact@v3 (path: dist)`,
+  `deploy-pages@v4`, with `pages: write` / `id-token: write` permissions and
+  the `github-pages` environment. README notes that the Pages source must be
+  set to "GitHub Actions".
+
+Decisions made by opencode while implementing section 7.1 (Rev. 3):
+
+- **fitCamera split** — the pure math lives in `src/render/fit.js`
+  (`boardExtent(W,H,size,gap)` from `cellCenter` + one cell of margin, and
+  `computeCameraFit({aspect, vFov, hx, hz, hudHeightPx, canvasHeightPx})` →
+  `{radius, lowerRadiusLimit, upperRadiusLimit, targetZ}`); it imports no
+  Babylon code and is covered by `test/fit.test.js`. The impure
+  `fitCamera(camera, engine, extent)` in `scene.js` measures `#hud`'s live
+  height and is called by `main.js` on startup **and** on every resize (which
+  also resets `camera.radius` to the new fit — user zoom is reset on window
+  resize, per "auto-fit on every resize"). The refit listener calls
+  `engine.resize()` first so the aspect uses fresh dimensions.
+- **HUD shift sign** — with `alpha=-π/2` the camera looks from −z toward +z,
+  so world +z is screen-up; `target.z = visibleHalfDepth * (hudPx/canvasPx)`
+  moves the target "up" on screen, which renders the board below screen
+  center — i.e. centered in the area under the top bar.
+- **Cat scale** — `root.scaling = 1.4` at all times; the trapperWin squash is
+  now `1.4 * 0.8` (relative to the base scale), reset restores 1.4. Head/eyes/
+  ears moved slightly toward the cat's center and the tail shortened (0.55
+  long at z −0.44, was 0.7 at −0.55) so the 1.4× footprint stays within a
+  single cell for every yaw direction.
+- **Hint ∩ highlight ring** — pooled per-cell flat cylinders
+  (`diameter 2.3, height 0.06, y = −0.11`, `isPickable = false`, shared hint
+  material) created lazily under cells that are both hinted and highlighted;
+  such cells keep the highlight (clickable) color. Hint-only cells keep the
+  orange cell color. Rings are disposed on rebuild/dispose. (Picking filters
+  on `metadata.index`, and the rings' `hintRing` metadata has none, so they
+  are never picked.)
+- **Cell materials** — uniform `emissive = diffuse * 0.15` and black
+  specular for every cell material (was 0.15–0.7 per material); cat materials
+  kept as-is (Rev. 3 only covers cell materials). New palette: empty
+  `#7cc576`, border `#b5dba8`, hint `#ff7a1a`; hover/highlight/blocked/flash
+  unchanged.
+- **Hint checkbox label** — restructured to an explicit
+  `<label id="hint-label" for="hint-checkbox">` sibling of the input (the
+  previous label both wrapped the input and carried `for`, which the
+  accessibility audit flagged as reading "on"); `hud.js` keeps writing to the
+  same id, which is now the `<label>` itself. All three form controls
+  (`mode-select`, `difficulty-select`, `hint-checkbox`) now have an explicit
+  `<label for>`.
+- **Dev hook** — `window.__catescape = { controller, view }` only under
+  `import.meta.env.DEV`, so production/Pages builds tree-shake it away.
+- **Result message mode** — `hud.showResult` picks the message from
+  `controller.state.mode` (the game that just ended) with `settings.mode`
+  only as a fallback; previously the mode *select* was used, which produced
+  the wrong text when the player switched modes before pressing "Play
+  again". `hud.js` is unit-testable without a real DOM (it only needs
+  `document.getElementById` plus plain element objects), so
+  `test/hud.test.js` covers all four (status, mode) mappings and the
+  select-vs-game divergence regression.
+- **CSP** — `index.html` carries the Electron-recommended meta CSP
+  (`default-src/script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'
+  ws://localhost:5173 http://localhost:5173`). The built `dist/index.html`
+  contains no inline scripts (only `src=` assets), so `script-src 'self'`
+  is safe for Pages/Electron; Vite dev mode is covered because the Vite
+  client is loaded from a same-origin `src` URL, HMR uses
+  `ws://localhost:5173` (explicitly in `connect-src`) and dev CSS is
+  injected as `<style>` (allowed by `'unsafe-inline'`).
