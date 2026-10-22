@@ -216,6 +216,7 @@ flashInvalid(i)
 - Phone width (≥360px): the top bar wraps onto two lines.
 
 ## 9. Directory layout and configuration
+All project files live in the repository's `CatEscapeJs/` folder (paths below are relative to it). Only `LICENSE`, `.gitignore` and `.github/workflows/` sit at the repository root; the workflow runs with `working-directory: CatEscapeJs`.
 ```
 package.json          "type":"module", "main":"electron/main.cjs"
 vite.config.js        base:'./', build.outDir:'dist', test:{environment:'node'}

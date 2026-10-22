@@ -15,7 +15,10 @@ GitHub Pages でも動きます。
 
 ## 開発
 
+プロジェクトはリポジトリの `CatEscapeJs/` フォルダにあります。
+
 ```bash
+cd CatEscapeJs
 npm install
 npm test          # vitest（純粋ロジックのユニットテスト）
 npm run dev       # Vite 開発サーバー
@@ -65,7 +68,10 @@ runs as a desktop app via Electron and on GitHub Pages from the same build.
 
 ## Development
 
+The project lives in the repository's `CatEscapeJs/` folder.
+
 ```bash
+cd CatEscapeJs
 npm install
 npm test          # vitest (pure-logic unit tests)
 npm run dev       # Vite dev server
