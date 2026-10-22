@@ -1,7 +1,0 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    { "name": "preview", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "CatEscapeJs", "run", "preview", "--", "--port", "4173", "--strictPort"], "port": 4173 },
-    { "name": "dev", "runtimeExecutable": "npm", "runtimeArgs": ["--prefix", "CatEscapeJs", "run", "dev", "--", "--port", "5173", "--strictPort"], "port": 5173 }
-  ]
-}
