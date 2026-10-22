@@ -34,7 +34,8 @@ npm run electron:build # Windows インストーラ（nsis）生成
 
 ## GitHub Pages へのデプロイ
 
-`.github/workflows/pages.yml` が push（main ブランチ）ごとにテスト・ビルド・デプロイを行います。
+`.github/workflows/pages.yml` がテスト・ビルド・デプロイを行います。**手動実行のみ**です（Actions タブ → Deploy to GitHub Pages → Run workflow）。
+非公開リポジトリでは、無料プランだと GitHub Pages を使えません。
 
 **注意: リポジトリの Settings → Pages → Source を「GitHub Actions」に設定してください。**
 設定しないとデプロイワークフローが実行されません。
@@ -87,7 +88,8 @@ npm run electron:build # Windows installer (nsis)
 
 ## Deploying to GitHub Pages
 
-`.github/workflows/pages.yml` tests, builds and deploys on every push to `main`.
+`.github/workflows/pages.yml` tests, builds and deploys. It runs **manually only** (Actions tab → Deploy to GitHub Pages → Run workflow).
+GitHub Pages is not available for private repositories on the free plan.
 
 **Note: set the repository's Settings → Pages → Source to "GitHub Actions".**
 The workflow will not deploy until the source is set.

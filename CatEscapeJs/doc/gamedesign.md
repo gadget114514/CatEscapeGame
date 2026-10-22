@@ -247,7 +247,7 @@ dependencies: `@babylonjs/core`. devDependencies: `vite`, `vitest`, `electron`, 
 `process.env.VITE_DEV_SERVER_URL` set → `loadURL`, otherwise → `loadFile(path.join(__dirname,'../dist/index.html'))`. Menu bar hidden.
 electron-builder: `appId: com.gadget114514.catescape`, `productName: CatEscape`, `files: ["dist/**","electron/**"]`, win target `nsis`.
 
-**.github/workflows/pages.yml**: on push to main → Node 20, `npm ci`, `npm test`, `npm run build`,
+**.github/workflows/pages.yml**: manual trigger (`workflow_dispatch`) → Node 20, `npm ci`, `npm test`, `npm run build`,
 `actions/upload-pages-artifact@v3 (path: dist)` → `actions/deploy-pages@v4`. permissions `pages: write, id-token: write`.
 (Pages source must be set to "GitHub Actions" in the repo settings. Note this in the README.)
 
@@ -395,7 +395,7 @@ Electron, Pages):
   (`Menu.setApplicationMenu(null)`); on macOS the `activate` hook recreates
   the window. electron-builder config lives in the `build` section of
   package.json (appId `com.gadget114514.catescape`, nsis).
-- **Pages workflow** — `pages.yml` runs on push to `main`: checkout@v4,
+- **Pages workflow** — `pages.yml` runs manually (`workflow_dispatch`; changed from push-to-main because the repo is private and Pages is unavailable on the current plan): checkout@v4,
   setup-node@v4 (Node 20, npm cache), `npm ci`, `npm test`,
   `npm run build`, `upload-pages-artifact@v3 (path: dist)`,
   `deploy-pages@v4`, with `pages: write` / `id-token: write` permissions and

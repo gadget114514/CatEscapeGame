@@ -1,8 +1,9 @@
 name: Deploy to GitHub Pages
 
+# Manual only: the repo is private, and Pages isn't available on the current plan.
+# Run it from the Actions tab once Pages is enabled (Settings → Pages → Source: GitHub Actions).
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
