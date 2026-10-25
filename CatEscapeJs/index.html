@@ -18,13 +18,27 @@
     <div id="hud">
       <div id="top-bar">
         <div class="control">
+          <label id="rules-label" for="rules-select">ルール</label>
+          <select id="rules-select">
+            <option value="basic">基本</option>
+            <option value="gimmick">ギミック</option>
+          </select>
+        </div>
+        <div class="control">
+          <label id="play-label" for="play-select">プレイスタイル</label>
+          <select id="play-select">
+            <option value="streak">連勝</option>
+            <option value="level">レベル攻略</option>
+          </select>
+        </div>
+        <div class="control">
           <label id="mode-label" for="mode-select">モード</label>
           <select id="mode-select">
             <option value="trapper">ねこをつかまえる</option>
             <option value="escape">ねことしてにげる</option>
           </select>
         </div>
-        <div class="control">
+        <div class="control" id="difficulty-control">
           <label id="diff-label" for="difficulty-select">難易度</label>
           <select id="difficulty-select">
             <option value="easy">やさしい</option>
@@ -32,19 +46,73 @@
             <option value="hard">むずかしい</option>
           </select>
         </div>
+        <div class="control" id="blocks-control">
+          <label id="blocks-label" for="blocks-slider">むずかしさの微調整</label>
+          <input
+            type="range"
+            id="blocks-slider"
+            min="0"
+            max="100"
+            step="1"
+            value="50"
+            aria-label="むずかしさの微調整"
+          />
+          <span id="blocks-value"></span>
+        </div>
+        <div class="control">
+          <label id="camera-label" for="camera-select">カメラ</label>
+          <select id="camera-select">
+            <option value="perspective">3D</option>
+            <option value="ortho">真上</option>
+          </select>
+        </div>
+        <div class="control">
+          <label id="fx-label" for="fx-select">演出</label>
+          <select id="fx-select">
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+        </div>
+        <div class="control" id="lang-control">
+          <label id="lang-label" for="lang-select">言語</label>
+          <select id="lang-select">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <button id="level-select-btn" type="button" hidden>レベル選択</button>
+        <span id="level-label" hidden></span>
         <button id="new-game-btn" type="button">あたらしいゲーム</button>
-        <div class="control checkbox-control">
-          <input type="checkbox" id="hint-checkbox" />
-          <label id="hint-label" for="hint-checkbox">ルートを表示</label>
+        <button id="route-btn" type="button" disabled>ルートを表示</button>
+      </div>
+      <div id="status-row">
+        <div id="status-line"></div>
+        <div id="item-bar" hidden>
+          <button id="item-btn" type="button" aria-pressed="false" disabled></button>
+          <span id="ai-items"></span>
+        </div>
+        <div id="power-bar" hidden>
+          <div id="power-gauge" role="img" aria-label="パワー 0/6"></div>
+          <button id="dash-btn" type="button" aria-pressed="false" hidden disabled>ダッシュ（2マス）</button>
+          <button id="jump-btn" type="button" aria-pressed="false" hidden disabled>ジャンプ</button>
+          <button id="stop-dash-btn" type="button" hidden disabled>ここで止める</button>
         </div>
       </div>
-      <div id="status-line"></div>
+      <div id="toast-area" aria-live="polite"></div>
     </div>
     <div id="result-modal">
       <div id="result-card">
         <p id="result-text"></p>
         <p id="result-moves"></p>
-        <button id="play-again-btn" type="button">もういちど</button>
+        <p id="result-streak" hidden></p>
+        <p id="result-progress" hidden></p>
+        <p id="result-rewards" hidden></p>
+        <div id="result-actions">
+          <button id="play-again-btn" type="button">もういちど</button>
+          <button id="result-levels-btn" type="button" hidden>レベル選択</button>
+          <button id="next-level-btn" type="button" hidden>次のレベル</button>
+        </div>
       </div>
     </div>
     <script type="module" src="./src/main.js"></script>

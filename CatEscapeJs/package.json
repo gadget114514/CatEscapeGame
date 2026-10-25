@@ -9,6 +9,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:perf": "vitest run test/perf --no-file-parallelism --pool forks --poolOptions.forks.singleFork",
+    "balance": "node scripts/balance.mjs",
+    "sweep": "node scripts/sweep.mjs",
+    "calibrate": "node scripts/calibrate.mjs",
     "electron:dev": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron": "vite build && electron .",
     "electron:build": "vite build && electron-builder --win"

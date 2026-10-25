@@ -260,17 +260,15 @@ describe('Hard difficulty', () => {
     expect(catTurns).toBeLessThanOrEqual(3);
   });
 
-  it('answers in under 100 ms on a realistic mid-game board', () => {
+  it('answers with a legal move on a realistic mid-game board', () => {
+    // (the <100 ms timing budget lives in test/perf, run via npm run test:perf)
     for (const seed of [11, 22, 33]) {
       const state = midGame(seed);
       const blocks = state.board.blocked.reduce((a, b) => a + b, 0);
       expect(blocks).toBeGreaterThanOrEqual(20);
       const rng = mulberry32(seed);
-      const t0 = performance.now();
       const move = chooseCatMove(state, rng);
-      const dt = performance.now() - t0;
       expect(legalCatMoves(state)).toContain(move);
-      expect(dt).toBeLessThan(100);
     }
   });
 
