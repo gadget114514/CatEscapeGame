@@ -213,6 +213,9 @@ const IDS = [
   'level-label',
   'new-game-btn',
   'route-btn',
+  'menu-btn',
+  'debug-toggle',
+  'debug-bar',
   'status-line',
   'item-bar',
   'item-btn',
@@ -232,6 +235,7 @@ const IDS = [
   'play-again-btn',
   'result-levels-btn',
   'next-level-btn',
+  'result-menu-btn',
 ];
 
 function makeEl(tag = 'div') {
@@ -337,8 +341,9 @@ function setupHud({ strings = STRINGS.ja, state, settings, progress, controller:
   const levelSelect = { open: vi.fn(), isOpen: () => false };
   const onStart = vi.fn();
   const onCameraMode = vi.fn();
-  hud.attach({ controller, levelSelect, getProgress: () => progress, onStart, onCameraMode });
-  return { hud, byId, controller, levelSelect, onStart, onCameraMode };
+  const onMenu = vi.fn();
+  hud.attach({ controller, levelSelect, getProgress: () => progress, onStart, onCameraMode, onMenu });
+  return { hud, byId, controller, levelSelect, onStart, onCameraMode, onMenu };
 }
 
 describe('hud: status line and top bar (Rev. 4)', () => {
@@ -436,6 +441,74 @@ describe('hud: status line and top bar (Rev. 4)', () => {
     byId['camera-select'].value = 'ortho';
     byId['camera-select'].addEventListener.mock.calls[0][1]();
     expect(onCameraMode).toHaveBeenCalledWith('ortho');
+  });
+});
+
+/* ------------------------------------------- HUD play-flow lock (Rev. 9) */
+
+describe('hud: play-flow lock and debug bar (Rev. 9)', () => {
+  afterEach(() => {
+    delete globalThis.document;
+    delete globalThis.localStorage;
+  });
+
+  it('the debug bar starts hidden and the toggle opens it', () => {
+    const { byId } = setupHud({ state: { mode: 'trapper', moveCount: 0 } });
+    expect(byId['debug-bar'].hidden).toBe(true);
+    expect(byId['debug-toggle'].getAttribute('aria-expanded')).toBe('false');
+    const toggle = byId['debug-toggle'].addEventListener.mock.calls[0][1];
+    toggle();
+    expect(byId['debug-bar'].hidden).toBe(false);
+    expect(byId['debug-toggle'].getAttribute('aria-expanded')).toBe('true');
+    toggle();
+    expect(byId['debug-bar'].hidden).toBe(true);
+  });
+
+  it('the menu button calls onMenu; the result menu button too', () => {
+    const { hud, byId, onMenu } = setupHud({ state: { mode: 'trapper', moveCount: 0 } });
+    byId['menu-btn'].addEventListener.mock.calls[0][1]();
+    expect(onMenu).toHaveBeenCalledTimes(1);
+    hud.showResult('trapperWin', 5);
+    byId['result-menu-btn'].addEventListener.mock.calls[0][1]();
+    expect(onMenu).toHaveBeenCalledTimes(2);
+    expect(byId['result-modal'].classList.contains('visible')).toBe(false);
+  });
+
+  it('applySettings updates the live settings and persists them', () => {
+    const { hud, byId } = setupHud({ state: { mode: 'trapper', moveCount: 0 } });
+    hud.applySettings({
+      rules: 'gimmick',
+      play: 'level',
+      role: 'escape',
+      difficulty: 'hard',
+      level: 7,
+    });
+    const s = hud.getSettings();
+    expect(s.rules).toBe('gimmick');
+    expect(s.play).toBe('level');
+    expect(s.role).toBe('escape');
+    expect(s.course).toBe('escape'); // course follows role
+    expect(s.difficulty).toBe('hard');
+    expect(s.level).toBe(7);
+    expect(byId['rules-select'].value).toBe('gimmick');
+    expect(byId['mode-select'].value).toBe('escape');
+    expect(byId['difficulty-select'].value).toBe('hard');
+    const saved = JSON.parse(globalThis.localStorage.getItem('catescape.settings'));
+    expect(saved.rules).toBe('gimmick');
+    expect(saved.level).toBe(7);
+  });
+
+  it('applySettings ignores unknown values', () => {
+    const { hud } = setupHud({
+      state: { mode: 'trapper', moveCount: 0 },
+      settings: { rules: 'basic', play: 'streak', role: 'trapper', difficulty: 'normal', level: 3 },
+    });
+    hud.applySettings({ rules: 'weird', difficulty: 'impossible', level: 99, play: 'level' });
+    const s = hud.getSettings();
+    expect(s.rules).toBe('basic');
+    expect(s.difficulty).toBe('normal');
+    expect(s.level).toBe(3);
+    expect(s.play).toBe('level'); // valid values still apply
   });
 });
 

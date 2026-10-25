@@ -1,10 +1,14 @@
 /**
- * The DOM HUD (Rev. 4 + 13.5/13.7/14.4-2/14.6/13.9): the top bar (rules /
- * play style / role / difficulty / camera / language), status line with
- * the streak and the multi-cat goal, the item bar, the 14.5 power gauge
- * (dash / jump / stop-dash) and toasts, the level-select button + label
- * and the result modal with its extra lines. Implements the controller's
- * HUD interface (setStatus/setTurn/showResult/setSeed/notify/
+ * The DOM HUD (Rev. 4 + 13.5/13.7/14.4-2/14.6/13.9, Rev. 9 play-flow):
+ * the **play bar** carries only in-game controls (level label, route,
+ * camera / fx / language, menu) — mode / style / rules / difficulty are
+ * fixed when a game starts. The old axis selects moved to the **debug
+ * bar** (`#debug-bar`, hidden by default, toggled by `#debug-toggle`);
+ * changing one there still restarts the game (debug convenience).
+ * Also: status line with the streak and the multi-cat goal, the item bar,
+ * the 14.5 power gauge (dash / jump / stop-dash) and toasts, and the
+ * result modal with its extra lines. Implements the controller's HUD
+ * interface (setStatus/setTurn/showResult/setSeed/notify/
  * setInventory/setPower) — status texts are built here, so the
  * controller's English setStatus text is intentionally ignored.
  *
@@ -197,6 +201,9 @@ export function createHud({ strings: initialStrings } = {}) {
     levelLabel: el('level-label'),
     newGameBtn: el('new-game-btn'),
     routeBtn: el('route-btn'),
+    menuBtn: el('menu-btn'),
+    debugToggle: el('debug-toggle'),
+    debugBar: el('debug-bar'),
     statusLine: el('status-line'),
     itemBar: el('item-bar'),
     itemBtn: el('item-btn'),
@@ -216,6 +223,7 @@ export function createHud({ strings: initialStrings } = {}) {
     playAgainBtn: el('play-again-btn'),
     resultLevelsBtn: el('result-levels-btn'),
     nextLevelBtn: el('next-level-btn'),
+    resultMenuBtn: el('result-menu-btn'),
   };
 
   // power gauge pips (14.5): six dots inside #power-gauge
@@ -243,6 +251,8 @@ export function createHud({ strings: initialStrings } = {}) {
   let onFxQuality = null;
   /** @type {((on:boolean) => void)|null} Rev. 6: double-armed edge ring */
   let onDoubleArmed = null;
+  /** @type {(() => void)|null} Rev. 9: open the start wizard (menu button) */
+  let onMenu = null;
   /** @type {Settings} */
   let settings = loadSettings();
   /** 16.3: the slider's saved block count per (rules,play,course,level,diff). */
@@ -361,6 +371,9 @@ export function createHud({ strings: initialStrings } = {}) {
     if (dom.dashBtn) dom.dashBtn.textContent = t.dash;
     if (dom.jumpBtn) dom.jumpBtn.textContent = t.jump;
     if (dom.stopDashBtn) dom.stopDashBtn.textContent = t.stopDash;
+    if (dom.menuBtn) dom.menuBtn.textContent = t.menu;
+    if (dom.resultMenuBtn) dom.resultMenuBtn.textContent = t.menu;
+    if (dom.debugToggle) dom.debugToggle.textContent = t.debugToggle;
     dom.newGameBtn.textContent = t.newGame;
     dom.routeBtn.textContent = t.route;
     dom.levelSelectBtn.textContent = t.levelsSelect;
@@ -726,13 +739,15 @@ export function createHud({ strings: initialStrings } = {}) {
 
     /**
      * Wire the controls. Called once after the controller exists.
+     * Rev. 9: `onMenu` opens the start wizard (menu / result-menu buttons).
      * @param {{controller: import('../game/controller.js').GameController,
      *          levelSelect?: {open():void, refresh?():void},
      *          getProgress?: () => import('../game/play/progress.js').Progress,
      *          onStart?: () => void,
      *          onCameraMode?: (mode:'perspective'|'ortho') => void,
      *          onFxQuality?: (fx:'high'|'medium'|'low') => void,
-     *          onDoubleArmed?: (on:boolean) => void}} deps
+     *          onDoubleArmed?: (on:boolean) => void,
+     *          onMenu?: () => void}} deps
      */
     attach({
       controller: c,
@@ -742,6 +757,7 @@ export function createHud({ strings: initialStrings } = {}) {
       onCameraMode: cam,
       onFxQuality: fxq,
       onDoubleArmed: dmx,
+      onMenu: menu,
     }) {
       controller = c;
       levelSelect = ls || null;
@@ -750,12 +766,16 @@ export function createHud({ strings: initialStrings } = {}) {
       onCameraMode = cam || null;
       onFxQuality = fxq || null;
       onDoubleArmed = dmx || null;
+      onMenu = menu || null;
 
       dom.rulesSelect.value = settings.rules;
       dom.playSelect.value = settings.play;
       dom.modeSelect.value = settings.role;
       dom.diffSelect.value = settings.difficulty;
       dom.cameraSelect.value = 'perspective';
+      // Rev. 9: the debug bar is closed on attach (whatever the markup said)
+      if (dom.debugBar) dom.debugBar.hidden = true;
+      if (dom.debugToggle) dom.debugToggle.setAttribute('aria-expanded', 'false');
 
       // language select (13.9): options show their own names
       if (dom.langSelect) {
@@ -858,6 +878,26 @@ export function createHud({ strings: initialStrings } = {}) {
       dom.routeBtn.addEventListener('click', () => {
         if (controller) controller.showHint();
       });
+      // Rev. 9: menu → start wizard (settings changes go through it)
+      if (dom.menuBtn) {
+        dom.menuBtn.addEventListener('click', () => {
+          if (onMenu) onMenu();
+        });
+      }
+      if (dom.resultMenuBtn) {
+        dom.resultMenuBtn.addEventListener('click', () => {
+          dom.resultModal.classList.remove('visible');
+          if (onMenu) onMenu();
+        });
+      }
+      // Rev. 9: the debug bar opens the old axis selects (restart on change)
+      if (dom.debugToggle && dom.debugBar) {
+        dom.debugToggle.addEventListener('click', () => {
+          const open = dom.debugBar.hidden;
+          dom.debugBar.hidden = !open;
+          dom.debugToggle.setAttribute('aria-expanded', String(open));
+        });
+      }
       dom.levelSelectBtn.addEventListener('click', () => {
         if (levelSelect) levelSelect.open();
       });
@@ -904,6 +944,32 @@ export function createHud({ strings: initialStrings } = {}) {
       persist();
       updateControls();
       startNewGame();
+    },
+
+    /**
+     * Apply a settings patch in-memory + persist + refresh the controls
+     * (Rev. 9: the start wizard's only settings path — `getSettings`
+     * returns a copy, so writing that never reached the live settings).
+     * Unknown values are ignored; `role` keeps `course` in sync.
+     * @param {Partial<Settings>} patch
+     */
+    applySettings(patch) {
+      const p = patch || {};
+      if (p.rules === 'basic' || p.rules === 'gimmick') settings.rules = p.rules;
+      if (p.play === 'streak' || p.play === 'level') settings.play = p.play;
+      if (p.role === 'trapper' || p.role === 'escape') {
+        settings.role = p.role;
+        settings.course = p.role;
+      }
+      if (['easy', 'normal', 'hard'].includes(p.difficulty)) settings.difficulty = p.difficulty;
+      if (Number.isInteger(p.level) && p.level >= 1 && p.level <= 20) settings.level = p.level;
+      persist();
+      dom.rulesSelect.value = settings.rules;
+      dom.playSelect.value = settings.play;
+      dom.modeSelect.value = settings.role;
+      dom.diffSelect.value = settings.difficulty;
+      updateControls();
+      updateStatus();
     },
 
     /**

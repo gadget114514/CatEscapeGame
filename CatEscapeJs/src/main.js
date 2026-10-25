@@ -32,20 +32,31 @@ const { engine, scene, camera, setCameraMode } = createScene(canvas);
 const view = createView(scene);
 const hud = createHud();
 const introCard = createIntroCard();
+
+// Rev. 9: the wizard is the single entry — settings chosen there are
+// applied through `hud.applySettings` (getSettings returns a copy, so
+// mutating it never reached the live settings before).
+let pendingWizardCfg = null;
+let levelsFromWizard = false;
+
 const startWizard = createStartWizard({
   onNewGame(cfg) {
-    const s = hud.getSettings();
-    s.rules = cfg.rules;
-    s.play = cfg.play;
-    s.role = cfg.role;
-    s.course = cfg.role;
-    s.difficulty = cfg.difficulty;
-    s.level = cfg.level || 1;
-    try { localStorage.setItem('catescape.settings', JSON.stringify(s)); } catch {}
+    hud.applySettings({
+      rules: cfg.rules,
+      play: cfg.play,
+      role: cfg.role,
+      difficulty: cfg.difficulty,
+      level: cfg.level || 1,
+    });
     startGame();
   },
   onContinue() {
     startGame();
+  },
+  onOpenLevels(cfg) {
+    pendingWizardCfg = cfg || null;
+    levelsFromWizard = true;
+    levelSelect.open();
   },
 });
 // Rev. 6: apply the saved 演出 quality before the first game (17.1)
@@ -149,7 +160,30 @@ const controller = new GameController({
 const levelSelect = createLevelSelect({
   getSettings: () => hud.getSettings(),
   getProgress: () => progress,
-  onSelect: (level, course) => hud.setLevelAndStart(level, course),
+  onSelect: (level, course) => {
+    // Rev. 9: a level picked from the wizard applies the wizard's config
+    // (rules / play / difficulty) together with the course + level
+    if (pendingWizardCfg) {
+      const cfg = pendingWizardCfg;
+      pendingWizardCfg = null;
+      levelsFromWizard = false;
+      hud.applySettings({
+        rules: cfg.rules,
+        play: 'level',
+        role: course,
+        difficulty: cfg.difficulty,
+      });
+    }
+    hud.setLevelAndStart(level, course);
+  },
+  onDismiss: () => {
+    pendingWizardCfg = null;
+    // a dismissed pick from the wizard returns to the setup step
+    if (levelsFromWizard) {
+      levelsFromWizard = false;
+      startWizard.open('new');
+    }
+  },
 });
 
 hud.attach({
@@ -160,6 +194,11 @@ hud.attach({
   onCameraMode,
   onFxQuality: (q) => view.setFxQuality(q), // Rev. 6 (17.1)
   onDoubleArmed: (on) => view.setDoubleArmed(on), // Rev. 6 (17.3)
+  onMenu: () => {
+    pendingWizardCfg = null;
+    levelsFromWizard = false;
+    startWizard.open();
+  },
 });
 setupPicking(scene, controller, view);
 
@@ -183,9 +222,6 @@ function onCameraMode(mode) {
 refit();
 window.addEventListener('resize', refit);
 
-// show start wizard on first load
-startWizard.open();
-
 if (import.meta.env.DEV) {
   // dev hook (Rev. 3 extended per 12.9) for automated play-tests
   window.__catescape = {
@@ -207,6 +243,7 @@ if (import.meta.env.DEV) {
   };
 }
 
-startGame();
+// Rev. 9: the wizard is the only entry — no game starts behind it
+startWizard.open();
 
 engine.runRenderLoop(() => scene.render());

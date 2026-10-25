@@ -16,7 +16,46 @@
   <body>
     <canvas id="game-canvas"></canvas>
     <div id="hud">
+      <!-- Play bar (Rev. 9): in-game controls only — no axis selects.
+           Mode/style/rules/difficulty are fixed when a game starts. -->
       <div id="top-bar">
+        <span id="level-label" hidden></span>
+        <button id="route-btn" type="button" disabled>ルートを表示</button>
+        <div class="control">
+          <label id="camera-label" for="camera-select">カメラ</label>
+          <select id="camera-select">
+            <option value="perspective">3D</option>
+            <option value="ortho">真上</option>
+          </select>
+        </div>
+        <div class="control">
+          <label id="fx-label" for="fx-select">演出</label>
+          <select id="fx-select">
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+        </div>
+        <div class="control" id="lang-control">
+          <label id="lang-label" for="lang-select">言語</label>
+          <select id="lang-select">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <button id="menu-btn" type="button">メニュー</button>
+        <button
+          id="debug-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="debug-bar"
+        >
+          デバッグ
+        </button>
+      </div>
+      <!-- Debug bar (Rev. 9): the old axis selects, hidden by default.
+           Changing one restarts the game — debug convenience only. -->
+      <div id="debug-bar" hidden>
         <div class="control">
           <label id="rules-label" for="rules-select">ルール</label>
           <select id="rules-select">
@@ -59,32 +98,8 @@
           />
           <span id="blocks-value"></span>
         </div>
-        <div class="control">
-          <label id="camera-label" for="camera-select">カメラ</label>
-          <select id="camera-select">
-            <option value="perspective">3D</option>
-            <option value="ortho">真上</option>
-          </select>
-        </div>
-        <div class="control">
-          <label id="fx-label" for="fx-select">演出</label>
-          <select id="fx-select">
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-          </select>
-        </div>
-        <div class="control" id="lang-control">
-          <label id="lang-label" for="lang-select">言語</label>
-          <select id="lang-select">
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
-          </select>
-        </div>
         <button id="level-select-btn" type="button" hidden>レベル選択</button>
-        <span id="level-label" hidden></span>
         <button id="new-game-btn" type="button">あたらしいゲーム</button>
-        <button id="route-btn" type="button" disabled>ルートを表示</button>
       </div>
       <div id="status-row">
         <div id="status-line"></div>
@@ -112,6 +127,7 @@
           <button id="play-again-btn" type="button">もういちど</button>
           <button id="result-levels-btn" type="button" hidden>レベル選択</button>
           <button id="next-level-btn" type="button" hidden>次のレベル</button>
+          <button id="result-menu-btn" type="button">メニュー</button>
         </div>
       </div>
     </div>

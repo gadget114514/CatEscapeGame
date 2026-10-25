@@ -1,10 +1,13 @@
 /**
- * Start wizard (proced): "はじめから / つづき" + new-game setup
- * Replaces the cluttered top-bar-first experience with a guided start.
- * Pure DOM — no Babylon.
+ * Start wizard (proced, Rev. 9): the single entry to play —
+ * "はじめから / つづき" + new-game setup (rules / play style / mode /
+ * difficulty; level play picks the level in the level-select screen).
+ * Axis settings are fixed once a game starts; mid-game changes go
+ * through this wizard (menu button). Pure DOM — no Babylon.
  */
 import { strings as liveStrings } from './strings.js';
 import { loadProgress } from '../game/play/progress.js';
+import { loadSettings } from './hud.js';
 
 const storage = {
   getItem(key) {
@@ -44,24 +47,50 @@ function hasProgress() {
 /**
  * @param {{strings?: Record<string, any>,
  *          onNewGame?: (cfg:any) => void,
- *          onContinue?: () => void}} [opts]
+ *          onContinue?: () => void,
+ *          onOpenLevels?: (cfg:any) => void}} [opts]
  */
 export function createStartWizard(opts = {}) {
   const pinnedStrings = opts.strings || null;
   const strings = () => pinnedStrings || liveStrings;
   const onNewGame = opts.onNewGame || (() => {});
   const onContinue = opts.onContinue || (() => {});
+  const onOpenLevels = opts.onOpenLevels || (() => {});
 
   let overlay = null;
   let step = 'root'; // root | new
-  let cfg = {
-    rules: 'gimmick',
-    play: 'streak',
-    role: 'escape',
-    difficulty: 'normal',
-    course: 'escape',
-    level: 1,
+  // Rev. 9: seeded from the saved settings; re-seeded on every root open
+  const seedFromSaved = () => {
+    const s = loadSettings();
+    return {
+      rules: s.rules,
+      play: s.play,
+      role: s.role,
+      difficulty: s.difficulty,
+      course: s.course,
+      level: s.level,
+    };
   };
+  /** @type {{rules:string, play:string, role:string, difficulty:string,
+   *          course:string, level:number}} */
+  let cfg = seedFromSaved();
+
+  /** One-line summary of the saved settings for the root screen. */
+  function summaryText() {
+    const t = strings();
+    const bits = [
+      cfg.rules === 'gimmick' ? t.rulesGimmick : t.rulesBasic,
+      cfg.play === 'level' ? t.playLevel : t.playStreak,
+      cfg.role === 'escape' ? t.modeEscape || t.escape : t.modeTrapper || t.trapper,
+      cfg.difficulty === 'easy'
+        ? t.easy
+        : cfg.difficulty === 'hard'
+          ? t.hard
+          : t.normal,
+    ];
+    if (cfg.play === 'level') bits.push(`L${cfg.level}`);
+    return bits.join(' · ');
+  }
 
   function build() {
     overlay = document.createElement('div');
@@ -105,6 +134,11 @@ export function createStartWizard(opts = {}) {
 
     const desc = el('p', 'start-wizard-desc', t.wizDesc || '「はじめから」または「つづき」から選んでください。');
     body.appendChild(desc);
+
+    // Rev. 9: what "つづき" will play (the saved settings)
+    if (hasProgress()) {
+      body.appendChild(el('p', 'start-wizard-summary', summaryText()));
+    }
 
     const btnRow = el('div', 'start-wizard-row');
     const cont = el('button', 'start-wizard-btn primary', t.wizContinue || 'つづき');
@@ -165,8 +199,8 @@ export function createStartWizard(opts = {}) {
     const roleRow = el('div', 'start-wizard-field');
     roleRow.appendChild(el('label', null, t.mode || 'モード'));
     const roleSel = document.createElement('select');
-    const r1 = document.createElement('option'); r1.value = 'escape'; r1.textContent = t.escape || 'ねことしてにげる';
-    const r2 = document.createElement('option'); r2.value = 'trapper'; r2.textContent = t.trapper || 'ねこをつかまえる';
+    const r1 = document.createElement('option'); r1.value = 'escape'; r1.textContent = t.modeEscape || t.escape || 'ねことしてにげる';
+    const r2 = document.createElement('option'); r2.value = 'trapper'; r2.textContent = t.modeTrapper || t.trapper || 'ねこをつかまえる';
     roleSel.appendChild(r1); roleSel.appendChild(r2);
     roleSel.value = cfg.role;
     roleSel.addEventListener('change', () => { cfg.role = roleSel.value; cfg.course = roleSel.value; });
@@ -186,20 +220,22 @@ export function createStartWizard(opts = {}) {
     diffRow.appendChild(diffSel);
     body.appendChild(diffRow);
 
-    // level
+    // level (Rev. 9): picked in the level-select screen, not a dropdown
     const levelRow = el('div', 'start-wizard-field');
     levelRow.id = 'start-wizard-level-row';
-    levelRow.appendChild(el('label', null, t.levelLabel || 'レベル'));
-    const levelSel = document.createElement('select');
-    for (let i = 1; i <= 20; i++) {
-      const opt = document.createElement('option');
-      opt.value = String(i);
-      opt.textContent = `L${i}`;
-      levelSel.appendChild(opt);
-    }
-    levelSel.value = String(cfg.level);
-    levelSel.addEventListener('change', () => { cfg.level = Number(levelSel.value) || 1; });
-    levelRow.appendChild(levelSel);
+    const levelBtn = el('button', 'start-wizard-btn', t.levelsPick || 'レベルを選ぶ');
+    levelBtn.type = 'button';
+    levelBtn.addEventListener('click', () => {
+      overlay.hidden = true;
+      onOpenLevels({ ...cfg });
+    });
+    levelRow.appendChild(levelBtn);
+    const levelNow = el(
+      'p',
+      'start-wizard-summary',
+      `${t.levelLabel || 'レベル'}: L${cfg.level}`,
+    );
+    levelRow.appendChild(levelNow);
     body.appendChild(levelRow);
 
     function updateLevelVis() {
@@ -220,9 +256,17 @@ export function createStartWizard(opts = {}) {
   }
 
   return {
-    open() {
-      step = 'root';
-      renderRoot();
+    /**
+     * Open the wizard. `'new'` jumps straight to the setup step (used when
+     * a level pick was dismissed); the plain root step re-reads the saved
+     * settings so the summary and defaults stay current (Rev. 9).
+     * @param {'root'|'new'} [where]
+     */
+    open(where = 'root') {
+      if (where === 'root') cfg = seedFromSaved();
+      step = where;
+      if (where === 'new') renderNew();
+      else renderRoot();
     },
     close() {
       if (overlay) overlay.hidden = true;

@@ -18,7 +18,8 @@ import { createDifficultyChart, statsFor } from './difficultyChart.js';
  *                               course?:string, level?:number,
  *                               difficulty?:string},
  *          getProgress?: () => import('../game/play/progress.js').Progress,
- *          onSelect?: (level:number, course:'trapper'|'escape') => void}} [opts]
+ *          onSelect?: (level:number, course:'trapper'|'escape') => void,
+ *          onDismiss?: () => void}} [opts]
  */
 export function createLevelSelect(opts = {}) {
   /** Live table (follows the language switch, 13.9); tests may pin one. */
@@ -27,6 +28,9 @@ export function createLevelSelect(opts = {}) {
   const getSettings = opts.getSettings || (() => ({}));
   const getProgress = opts.getProgress || (() => null);
   const onSelect = opts.onSelect || (() => {});
+  // Rev. 9: closed without a pick (close button / backdrop) — lets the
+  // wizard drop a pending new-game config
+  const onDismiss = opts.onDismiss || (() => {});
 
   /** @type {'trapper'|'escape'} currently browsed course tab */
   let course = 'escape';
@@ -113,7 +117,10 @@ export function createLevelSelect(opts = {}) {
     closeBtn.type = 'button';
     closeBtn.id = 'level-select-close';
     closeBtn.textContent = strings().close;
-    closeBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', () => {
+      close();
+      onDismiss();
+    });
 
     panel.appendChild(heading);
     panel.appendChild(tabBar);
@@ -124,7 +131,11 @@ export function createLevelSelect(opts = {}) {
     panel.appendChild(closeBtn);
     overlay.appendChild(panel);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) close(); // click on the backdrop
+      // click on the backdrop closes without a pick (Rev. 9: also dismisses)
+      if (e.target === overlay) {
+        close();
+        onDismiss();
+      }
     });
     document.body.appendChild(overlay);
   }

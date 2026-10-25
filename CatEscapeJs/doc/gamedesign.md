@@ -2467,3 +2467,56 @@ chart, sweep, ui, balance, controllerRuleset) were updated to read the
 calibrated centers/ranges dynamically instead of the old hard-coded
 B(5)-era values. `npm test` 537/537, `npm run test:perf` 6/6,
 `npm run build` pass.
+
+## Implementation notes (Rev. 9 — play-flow UI)
+
+The user's rule: **once a game has started, mode / play style / rules /
+difficulty must not be changeable**, and the old top-bar-first UI is
+debug-only, not the play flow.
+
+- **Play bar** (`#top-bar`) — in-game controls only: level label
+  (read-only), route button, camera / fx / language selects, the menu
+  button and the debug toggle. None of these restart the game (camera
+  and language already never did; menu opens the start wizard).
+- **Debug bar** (`#debug-bar`, hidden by default) — the old axis
+  selects (rules / play / mode / difficulty), the 16.3 block slider, the
+  level-select button and あたらしいゲーム, moved out of the play bar.
+  Toggled by `#debug-toggle` (always visible, `aria-expanded` +
+  `aria-controls`); changing a select there still restarts the game —
+  debug convenience, decided with the user (always-available toggle,
+  not DEV-gated). The slider is debug-only now; the play flow uses the
+  saved / center count.
+- **Start wizard = the single entry** — no game starts behind the
+  wizard anymore (the boot `startGame()` is gone; the DEV hook
+  `window.__catescape` stays). The wizard seeds its defaults from
+  `loadSettings()` on every root open and shows a one-line summary of
+  the saved settings above つづき. The old L1-20 level dropdown became
+  a 「レベルを選ぶ」 button that closes the wizard and opens the level
+  select (`onOpenLevels(cfg)`); dismissing the level select without a
+  pick returns to the wizard's setup step. Picking a level applies the
+  wizard's pending config (rules / play / difficulty) together with the
+  course + level.
+- **`hud.applySettings(patch)`** — the missing piece behind the old
+  wizard bug: `getSettings()` returns a copy, so `main.js` writing that
+  copy to localStorage never reached the live settings until reload.
+  `applySettings` merges a validated patch into the live settings
+  (course follows role), persists, syncs the select values and refreshes
+  the controls. The wizard's only settings path now.
+- **Menu** (`#menu-btn` in the play bar, `#result-menu-btn` in the
+  result modal) opens the start wizard (`hud.attach({onMenu})`); the
+  in-play あたらしいゲーム button is gone (re-merge via つづき).
+- **CSS restored** — commit `f208c85` had accidentally replaced
+  `src/style.css` (727 lines of HUD / level-select / result / intro /
+  chart styles) with only the wizard block; the full sheet was restored
+  from `f208c85^` and extended with the debug bar, the menu buttons and
+  the wizard summary/level-pick styles.
+- **i18n** — new keys `menu`, `debugToggle`, `levelsPick` in all six
+  languages; `de`/`fr`/`ru` were also missing the earlier wiz keys
+  (`wizTitle`…`start`), which made the key-parity test fail — filled in.
+- **Tests** — `test/ui.test.js` covers the debug toggle, the menu
+  buttons and `applySettings` (values, persistence, ignore-unknown);
+  new `test/startWizard.test.js` (minimal DOM stub) covers つづき
+  enablement, seeding from saved settings, the level-pick button /
+  `onOpenLevels(cfg)` payload, はじめる → `onNewGame(cfg)` and the
+  root summary. `npm test` passes except a pre-existing wall-clock
+  perf flake under the git-ignored `.claude/worktrees/` copy.
