@@ -1,4 +1,6 @@
-# Cat Escape（ねこにげ)
+# Cat Escape（ねこにげ）
+
+[**Play on GitHub Pages →**](https://gadget114514.github.io/CatEscapeGame/)
 
 「ねこをつかまえる」（Trap the Cat / Chat Noir）と、その逆ゲーム「ねこからにげる」を両方収録した
 六角マスボードゲームです。Babylon.js による 3D 描画、Electron でデスクトップアプリとしても、
@@ -51,6 +53,8 @@ npm run electron:build # Windows インストーラ（nsis）生成
 ---
 
 # Cat Escape (English)
+
+[**Play on GitHub Pages →**](https://gadget114514.github.io/CatEscapeGame/)
 
 A hex-board game that includes both classic "Trap the Cat" (Chat Noir) and its
 reverse, where you play the cat and escape. Rendered in 3D with Babylon.js;
