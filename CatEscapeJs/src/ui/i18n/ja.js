@@ -145,6 +145,19 @@ export default {
   introRuleCats3Escape: '3匹のうち、先に端へ出たほうが勝ち。',
   introNameCats3Catch: '3匹のねこ・つかまえる',
   introRuleCats3Catch: '3匹のうち、1匹でも動けなくすれば勝ち。',
+  // start wizard
+  wizTitle: 'ゲームをはじめる',
+  wizDesc: '「はじめから」または「つづき」から選んでください。',
+  wizContinue: 'つづき',
+  wizNewGame: 'はじめから',
+  wizNewTitle: 'はじめから（設定）',
+  playStyle: 'プレイスタイル',
+  playStreak: '連勝',
+  playLevel: 'レベル攻略',
+  levelLabel: 'レベル',
+  back: '戻る',
+  start: 'はじめる',
+
   // difficulty chart (13.8 / 14.6)
   chartTitle: '難易度グラフ',
   chartYou: 'あなた',

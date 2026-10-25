@@ -25,12 +25,29 @@ import { createHud } from './ui/hud.js';
 import { createLevelSelect } from './ui/levelSelect.js';
 import { createIntroCard } from './ui/introCard.js';
 import { getLang } from './ui/strings.js';
+import { createStartWizard } from './ui/startWizard.js';
 
 const canvas = document.getElementById('game-canvas');
 const { engine, scene, camera, setCameraMode } = createScene(canvas);
 const view = createView(scene);
 const hud = createHud();
 const introCard = createIntroCard();
+const startWizard = createStartWizard({
+  onNewGame(cfg) {
+    const s = hud.getSettings();
+    s.rules = cfg.rules;
+    s.play = cfg.play;
+    s.role = cfg.role;
+    s.course = cfg.role;
+    s.difficulty = cfg.difficulty;
+    s.level = cfg.level || 1;
+    try { localStorage.setItem('catescape.settings', JSON.stringify(s)); } catch {}
+    startGame();
+  },
+  onContinue() {
+    startGame();
+  },
+});
 // Rev. 6: apply the saved 演出 quality before the first game (17.1)
 view.setFxQuality(hud.getSettings().fx);
 
@@ -165,6 +182,9 @@ function onCameraMode(mode) {
 
 refit();
 window.addEventListener('resize', refit);
+
+// show start wizard on first load
+startWizard.open();
 
 if (import.meta.env.DEV) {
   // dev hook (Rev. 3 extended per 12.9) for automated play-tests

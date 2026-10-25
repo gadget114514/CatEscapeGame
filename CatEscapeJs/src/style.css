@@ -1,727 +1,77 @@
-html,
-body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #1e2a38;
-  color: #eaf2f8;
-  font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-}
-
-#game-canvas {
-  position: absolute;
+/* Start wizard */
+#start-wizard-overlay {
+  position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  touch-action: none;
-  outline: none;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
 }
-
-/* author `display` rules would otherwise beat the UA `[hidden]` style */
-[hidden] {
+#start-wizard-overlay[hidden] {
   display: none !important;
 }
-
-/* HUD overlay: the container lets pointer events through to the camera,
-   only the controls themselves capture them. */
-#hud {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  pointer-events: none;
-}
-
-#top-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding: 8px 12px;
-  background: rgba(13, 22, 31, 0.78);
-  pointer-events: auto;
-}
-
-.control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-}
-
-#hud label {
-  color: #cfe3f5;
-}
-
-#hud select,
-#hud button {
-  font: inherit;
-  font-size: 14px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #4a5f75;
-  background: #2c3e50;
-  color: #eaf2f8;
-  cursor: pointer;
-}
-
-#hud select:hover,
-#hud button:hover:not(:disabled) {
-  background: #3b5068;
-}
-
-#hud button:active:not(:disabled) {
-  background: #46607c;
-}
-
-#hud button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* Rev. 6 (17.2): button press scale + hover lift */
-#hud button,
-#level-select-panel button,
-#result-actions button {
-  transition:
-    transform 120ms ease-out,
-    background 120ms ease-out,
-    box-shadow 120ms ease-out;
-}
-
-#hud button:hover:not(:disabled),
-#level-select-panel button:hover:not(:disabled),
-#result-actions button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-#hud button:active:not(:disabled),
-#level-select-panel button:active:not(:disabled),
-#result-actions button:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-/* 16.3: block-count fine-tuning slider (right is always harder) */
-#blocks-control {
-  gap: 8px;
-}
-
-#hud input[type='range'] {
-  width: 120px;
-  accent-color: #3987e5;
-  cursor: pointer;
-}
-
-#blocks-value {
-  font-size: 13px;
-  color: #cfe3f5;
-  white-space: nowrap;
-}
-
-#level-label {
-  font-size: 13px;
-  color: #ffe066;
-  white-space: nowrap;
-}
-
-/* Status line + item bar (gimmick rules only) */
-#status-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  pointer-events: auto;
-}
-
-#status-line {
-  padding: 4px 12px;
-  font-size: 13px;
-  color: #cfe3f5;
-  background: rgba(13, 22, 31, 0.6);
-}
-
-#item-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 12px;
-  font-size: 13px;
-  background: rgba(13, 22, 31, 0.6);
-}
-
-#item-btn[aria-pressed='true'] {
-  background: #7a5c1e;
-  border-color: #ffd23f;
-  color: #ffe066;
-}
-
-#ai-items {
-  color: #cfe3f5;
-}
-
-/* Power gauge + dash/jump buttons (14.5) */
-#power-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  font-size: 13px;
-  background: rgba(13, 22, 31, 0.6);
-}
-
-#power-gauge {
-  display: flex;
-  gap: 3px;
-  align-items: center;
-}
-
-.power-pip {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1px solid #6f8093;
-  background: #2c3e50;
-}
-
-.power-pip.on {
-  background: #ffd23f;
-  border-color: #ffe066;
-  box-shadow: 0 0 6px rgba(255, 210, 63, 0.7);
-  /* Rev. 6 (17.2): pips pop in 0 → 1.2 → 1 when filled */
-  animation: pip-pop 260ms ease-out;
-}
-
-@keyframes pip-pop {
-  0% {
-    transform: scale(0);
-  }
-  60% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-/* Rev. 6 (17.2): the full gauge pulses */
-#power-gauge.full {
-  animation: gauge-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes gauge-pulse {
-  50% {
-    transform: scale(1.08);
-    filter: brightness(1.25);
-  }
-}
-
-#dash-btn[aria-pressed='true'],
-#jump-btn[aria-pressed='true'] {
-  background: #7a5c1e;
-  border-color: #ffd23f;
-  color: #ffe066;
-}
-
-#stop-dash-btn {
-  border-color: #ff9d66;
-}
-
-/* Toasts (hud.notify) — slide in from the top with an ease-out-back
-   curve (Rev. 6, 17.2) */
-#toast-area {
-  position: fixed;
-  left: 50%;
-  top: 84px;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  z-index: 15;
-  pointer-events: none;
-}
-
-.toast {
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid #4a5f75;
-  background: rgba(28, 41, 56, 0.95);
-  color: #ffe066;
-  font-size: 14px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-  animation: toast-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-14px) scale(0.96);
-  }
-  70% {
-    opacity: 1;
-    transform: translateY(3px) scale(1.01);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Result modal */
-#result-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-
-#result-modal.visible {
-  display: flex;
-}
-
-#result-card {
-  min-width: 240px;
-  padding: 24px 32px;
+#start-wizard-panel {
+  min-width: 280px;
+  max-width: 360px;
+  padding: 24px 28px;
   border-radius: 12px;
   border: 1px solid #4a5f75;
   background: #1c2938;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  text-align: center;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-
-#result-text {
-  margin: 0 0 8px;
+#start-wizard-title {
+  margin: 0;
   font-size: 20px;
-  font-weight: 600;
-}
-
-#result-moves,
-#result-streak,
-#result-progress,
-#result-rewards {
-  margin: 0 0 8px;
-  color: #cfe3f5;
-}
-
-#result-rewards {
-  color: #ffd23f;
-}
-
-#result-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-#play-again-btn,
-#result-levels-btn,
-#next-level-btn {
-  padding: 8px 20px;
-  font-size: 15px;
-}
-
-/* Level select screen (built by src/ui/levelSelect.js) */
-#level-select-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-#level-select-overlay[hidden] {
-  display: none;
-}
-
-#level-select-panel {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid #4a5f75;
-  background: #1c2938;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   text-align: center;
 }
-
-#level-select-heading {
-  margin: 0 0 12px;
-  font-size: 18px;
+.start-wizard-desc {
+  margin: 0;
+  text-align: center;
+  color: #c9d6e3;
 }
-
-#level-select-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-#level-select-tabs button {
-  min-width: 96px;
-}
-
-#level-select-tabs button[aria-selected='true'] {
-  background: #46607c;
-  border-color: #66d9ff;
-}
-
-#level-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-/* Overlay buttons (tabs, close, chart) share the dark HUD look — the
-   UA default white button was unreadable on the dark panel */
-#level-select-panel button {
-  font: inherit;
-  font-size: 14px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #4a5f75;
-  background: #2c3e50;
-  color: #eaf2f8;
-  cursor: pointer;
-}
-
-#level-select-panel button:hover:not(:disabled) {
-  background: #3b5068;
-}
-
-#level-select-panel button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.level-card {
-  position: relative;
+.start-wizard-row {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 4px 8px;
-  border-radius: 8px;
-  /* UI fix (task 26): the dark HUD surface with readable tokens */
-  background: #223244;
-  border: 1px solid #4a5f75;
-  color: #eaf2f8;
+  gap: 10px;
 }
-
-.level-card .lv-num {
-  font-weight: 600;
-  color: #eaf2f8;
-}
-
-.level-card .lv-wins {
-  color: #ffd23f;
-  font-size: 12px;
-  letter-spacing: 1px;
-}
-
-.level-card .lv-ai {
-  font-size: 11px;
-  color: #cfe3f5;
-}
-
-.level-card:not(:disabled):hover {
-  background: #2c4157;
-}
-
-.level-card:disabled {
-  background: #1a2531;
-  border-color: #35485c;
-}
-
-.level-card:disabled .lv-num,
-.level-card:disabled .lv-wins,
-.level-card:disabled .lv-ai {
-  opacity: 0.5;
-}
-
-.level-card.current {
-  border-color: #66d9ff;
-  box-shadow: 0 0 0 1px #66d9ff inset;
-}
-
-/* Lock icon: pure CSS padlock, no asset files */
-.lv-lock {
-  display: block;
-  position: relative;
-  width: 14px;
-  height: 10px;
-  margin-top: 2px;
-  border-radius: 2px;
-  background: #9fb3c8;
-}
-
-.lv-lock::before {
-  content: '';
-  position: absolute;
-  left: 3px;
-  top: -6px;
-  width: 6px;
-  height: 6px;
-  border: 2px solid #9fb3c8;
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-}
-
-#level-select-inventory {
-  margin: 0 0 14px;
-  color: #ffd23f;
-  font-size: 14px;
-}
-
-/* Gimmick icons on level cards + intro cards (13.4) */
-.gim-icon {
-  display: inline-flex;
-  align-items: center;
-}
-
-.level-card .lv-gimmicks {
+.start-wizard-field {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2px;
-  max-width: 100%;
-}
-
-.level-card .lv-gimmicks svg {
-  width: 12px;
-  height: 12px;
-}
-
-/* Intro card overlay (13.4) */
-#intro-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-#intro-overlay[hidden] {
-  display: none;
-}
-
-#intro-card {
-  width: min(320px, calc(100vw - 48px));
-  padding: 20px 24px;
-  border-radius: 12px;
-  border: 1px solid #4a5f75;
-  background: #1c2938;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  text-align: center;
-}
-
-#intro-heading {
-  margin: 0 0 8px;
-  font-size: 16px;
-  color: #cfe3f5;
-}
-
-#intro-icon {
-  margin: 0 0 8px;
-}
-
-#intro-icon svg {
-  width: 44px;
-  height: 44px;
-}
-
-#intro-name {
-  margin: 0 0 6px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffe066;
-}
-
-#intro-rule {
-  margin: 0 0 14px;
-  color: #cfe3f5;
-  font-size: 14px;
-}
-
-/* Difficulty chart (13.8 / 14.6) */
-#chart-toggle {
-  display: block;
-  margin: 0 auto 10px;
-}
-
-#chart-wrap {
-  margin: 0 auto 14px;
-  width: min(100%, 420px);
-}
-
-#chart-diff {
-  display: flex;
-  justify-content: center;
+  flex-direction: column;
   gap: 6px;
-  margin-bottom: 6px;
 }
-
-.chart-diff-btn[aria-pressed='true'] {
-  background: #46607c;
-  border-color: #66d9ff;
+.start-wizard-field label {
+  color: #c9d6e3;
+  font-size: 14px;
 }
-
-/* UI fix (task 26): the legend is a wrapping DOM row above the plot —
-   the old in-SVG layout overlapped `むずかしい` into `あなた` */
-#chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 4px 14px;
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: #cfe3f5;
-}
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.legend-sample {
-  display: inline-block;
-  width: 16px;
-  height: 0;
-  border-top: 2px solid #3987e5;
-}
-
-.legend-sample.easy {
-  border-top-style: dotted;
-}
-
-.legend-sample.hard {
-  border-top-style: dashed;
-}
-
-.legend-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #3987e5;
-  border: 1.5px solid #eaf2f8;
-}
-
-#chart-holder {
-  position: relative;
-  background: rgba(13, 22, 31, 0.55);
-  border: 1px solid #35485c;
+.start-wizard-field select {
+  padding: 8px 10px;
   border-radius: 8px;
-  padding: 2px;
-}
-
-#chart-holder svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-#chart-tooltip {
-  position: absolute;
-  top: 2px;
-  transform: translateX(-50%);
-  max-width: 92%;
-  padding: 4px 8px;
-  border-radius: 6px;
   border: 1px solid #4a5f75;
-  background: rgba(28, 41, 56, 0.97);
-  color: #eaf2f8;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  z-index: 2;
+  background: #223346;
+  color: #e6edf3;
 }
-
-#chart-summary {
-  margin: 6px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: #cfe3f5;
+.start-wizard-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
-
-/* Phone width: the top bar may wrap onto three lines, stays usable >= 360px */
-@media (max-width: 480px) {
-  #top-bar {
-    gap: 6px 10px;
-    padding: 6px 8px;
-  }
-
-  .control {
-    font-size: 13px;
-  }
-
-  #hud select,
-  #hud button {
-    font-size: 13px;
-    padding: 4px 8px;
-  }
-
-  #hud input[type='range'] {
-    width: 84px;
-  }
-
-  #result-card {
-    margin: 0 16px;
-    padding: 20px 24px;
-  }
-
-  #toast-area {
-    top: 108px;
-    width: calc(100vw - 24px);
-  }
+.start-wizard-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #4a5f75;
+  background: #223346;
+  color: #e6edf3;
+  cursor: pointer;
 }
-
-/* Narrow phones: the level grid becomes 4 columns (spec 12.8) */
-@media (max-width: 400px) {
-  #level-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+.start-wizard-btn.primary {
+  background: #2f5d8c;
+  border-color: #5a8cc4;
 }
-
-/* Rev. 6 (17.1): respect prefers-reduced-motion in CSS too */
-@media (prefers-reduced-motion: reduce) {
-  .toast,
-  .power-pip.on,
-  #power-gauge.full {
-    animation: none;
-  }
-
-  #hud button,
-  #level-select-panel button,
-  #result-actions button {
-    transition: none;
-  }
-
-  #hud button:hover:not(:disabled),
-  #level-select-panel button:hover:not(:disabled),
-  #result-actions button:hover:not(:disabled),
-  #hud button:active:not(:disabled),
-  #level-select-panel button:active:not(:disabled),
-  #result-actions button:active:not(:disabled) {
-    transform: none;
-  }
+.start-wizard-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

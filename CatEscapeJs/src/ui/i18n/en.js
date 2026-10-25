@@ -147,6 +147,19 @@ export default {
   introRuleCats3Escape: 'Three cats; the first to reach an edge wins.',
   introNameCats3Catch: 'Three cats · catch them',
   introRuleCats3Catch: 'Three cats; trap any one of them to win.',
+  // start wizard
+  wizTitle: 'Start game',
+  wizDesc: 'Choose "New game" or "Continue".',
+  wizContinue: 'Continue',
+  wizNewGame: 'New game',
+  wizNewTitle: 'New game (settings)',
+  playStyle: 'Play style',
+  playStreak: 'Streak',
+  playLevel: 'Level',
+  levelLabel: 'Level',
+  back: 'Back',
+  start: 'Start',
+
   // difficulty chart (13.8 / 14.6)
   chartTitle: 'Difficulty chart',
   chartYou: 'You',
