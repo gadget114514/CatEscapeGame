@@ -9,12 +9,18 @@
  * translation / yaw is removed so the cat walks in place; catView keeps
  * driving the gameplay transform (hop / slide / arc / run-off).
  *
+ * The idle clip loops with Babylon's YOYO mode (it plays forward, then
+ * reverses instead of snapping back to its first frame). Idle and walk
+ * are cross-faded by animatable weight over FADE_MS, so every move blends
+ * back into the idle pose. All clips run at SPEED_SCALE (half speed).
+ *
  * The GLB is inlined (`?inline`) so the model also loads from file:// in
  * the Electron build, where XHR to a local asset URL is blocked.
  */
 import catModelUrl from '../../3d/bengal_cat_non_commercial.glb?inline';
 import { LoadAssetContainerAsync } from '@babylonjs/core/Loading/sceneLoader.js';
 import '@babylonjs/loaders/glTF/index.js';
+import { Animation } from '@babylonjs/core/Animations/animation.js';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { fxWarnOnce } from './fx/fxLog.js';
@@ -22,7 +28,9 @@ import { fxWarnOnce } from './fx/fxLog.js';
 const ROOT_BONE = 'Root_M_2_6';
 const IDLE_RANGE = [8.0, 10.05];
 const WALK_RANGE = [1.55, 7.98];
-const TARGET_LENGTH = 0.85; // keeps the cat inside one hex cell (CELL_SIZE 1.0)
+const TARGET_LENGTH = 1.7; // 2× the old footprint
+const SPEED_SCALE = 0.5; // all clips play at half speed
+const FADE_MS = 180; // idle ↔ walk cross-fade
 
 /** @type {WeakMap<import('@babylonjs/core/scene.js').Scene, Promise<any>>} */
 const templates = new WeakMap();
@@ -105,28 +113,82 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     ? base.targetedAnimations[0].animation.framePerSecond
     : 60;
   const frames = (seconds) => seconds * fps;
-  const idle = base.clone(`catModelIdle-${index}`);
-  const walk = base.clone(`catModelWalk-${index}`);
+  // Clone the animations too: the idle uses YOYO and the walk CYCLE, so
+  // they must not share the same `Animation.loopMode` instances.
+  const idle = base.clone(`catModelIdle-${index}`, undefined, true);
+  const walk = base.clone(`catModelWalk-${index}`, undefined, true);
+  for (const targeted of idle.targetedAnimations) {
+    if (targeted.animation) {
+      targeted.animation.loopMode = Animation.ANIMATIONLOOPMODE_YOYO;
+    }
+  }
   const groups = [base, idle, walk];
 
   let state = 'none';
   let sad = false;
   let lookYaw = 0;
+  let enabled = true;
+  /** @type {import('@babylonjs/core/Animations/animationGroup.js').AnimationGroup|null} */
+  let current = null;
+  /** @type {{from: any, to: any, t: number}|null} */
+  let fade = null;
 
   function stopAll() {
-    for (const group of groups) group.stop();
+    fade = null;
+    current = null;
+    state = 'none';
+    for (const group of groups) {
+      group.stop();
+      group.weight = 1;
+    }
+  }
+
+  /**
+   * Start `group` at weight 1 (no previous clip) or cross-fade into it
+   * from the current group over FADE_MS. Both clips animate the same
+   * skeleton, so Babylon combines them by animatable weight.
+   */
+  function fadeTo(group, speed, range, nextState) {
+    if (!enabled) return;
+    if (current === group && !fade) {
+      group.speedRatio = speed * SPEED_SCALE;
+      state = nextState;
+      return;
+    }
+    if (fade && fade.to === group) {
+      group.speedRatio = speed * SPEED_SCALE;
+      state = nextState;
+      return;
+    }
+    if (fade) {
+      // finish the fade that is already running before starting the next
+      fade.from.stop();
+      fade.from.weight = 1;
+      fade.to.weight = 1;
+      fade = null;
+    }
+    const prev = current;
+    state = nextState;
+    group.stop();
+    group.weight = 0;
+    group.start(true, speed * SPEED_SCALE, frames(range[0]), frames(range[1]));
+    group.weight = 0;
+    current = group;
+    if (!prev || prev === group) {
+      group.weight = 1;
+      return;
+    }
+    fade = { from: prev, to: group, t: 0 };
   }
 
   function startIdle(speed = 1) {
+    if (!enabled) return;
     stopAll();
     state = 'idle';
-    idle.start(true, speed, frames(IDLE_RANGE[0]), frames(IDLE_RANGE[1]));
-  }
-
-  function startWalk(speed) {
-    stopAll();
-    state = 'walk';
-    walk.start(true, speed, frames(WALK_RANGE[0]), frames(WALK_RANGE[1]));
+    current = idle;
+    idle.weight = 1;
+    idle.start(true, speed * SPEED_SCALE, frames(IDLE_RANGE[0]), frames(IDLE_RANGE[1]));
+    idle.weight = 1;
   }
 
   function applyLook() {
@@ -134,24 +196,42 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     wrapper.rotation.x = sad ? -0.16 : 0;
   }
 
+  // Babylon blends weighted animatables when the scene renders; drive the
+  // idle/walk cross-fade from the same frame loop.
+  const fadeObserver = scene.onBeforeRenderObservable.add(() => {
+    if (!fade) return;
+    fade.t += scene.getEngine().getDeltaTime();
+    const k = Math.min(1, fade.t / FADE_MS);
+    const e = k * k * (3 - 2 * k);
+    fade.from.weight = 1 - e;
+    fade.to.weight = e;
+    if (k >= 1) {
+      fade.from.stop();
+      fade.from.weight = 1;
+      fade.to.weight = 1;
+      fade = null;
+    }
+  });
+
   return {
     wrapper,
     meshes,
 
-    /** Loop the idle clip (idempotent). */
+    /** Blend back into the idle clip (idempotent). */
     playIdle() {
-      if (state !== 'idle') startIdle(1);
+      fadeTo(idle, 1, IDLE_RANGE, 'idle');
     },
 
     /**
-     * Walking / running loop for a gameplay move.
-     * @param {string} kind hop | arc | slide | tunnel | dash | run | happy
+     * Walking / running loop for a gameplay move. The GLB has only one
+     * walk clip, so every movement kind (including jumps) uses it.
+     * @param {string} kind walk | hop | jump | arc | slide | tunnel | dash | run | happy
      */
     playMove(kind) {
       const speed =
         kind === 'dash'
           ? 5
-          : kind === 'arc' || kind === 'happy'
+          : kind === 'jump' || kind === 'arc' || kind === 'happy'
             ? 4
             : kind === 'slide'
               ? 1.8
@@ -160,16 +240,20 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
                 : kind === 'run'
                   ? 2.2
                   : 3.2;
-      startWalk(speed);
+      fadeTo(walk, speed, WALK_RANGE, 'walk');
     },
 
     /** Slow idle = the cat is caught (trapperWin). */
     playLose() {
       sad = true;
       applyLook();
-      stopAll();
-      state = 'lose';
-      idle.start(true, 0.35, frames(IDLE_RANGE[0]), frames(IDLE_RANGE[1]));
+      if (!enabled) return;
+      if (current === idle) {
+        idle.speedRatio = 0.35 * SPEED_SCALE;
+        state = 'lose';
+        return;
+      }
+      fadeTo(idle, 0.35, IDLE_RANGE, 'lose');
     },
 
     /** The cat calms down again after a result / rebuild. */
@@ -177,7 +261,16 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
       sad = false;
       lookYaw = 0;
       applyLook();
-      state = 'none';
+      startIdle(1);
+    },
+
+    /** Pause / resume the skeletal animation without affecting movement. */
+    setAnimated(on) {
+      enabled = !!on;
+      if (!enabled) {
+        stopAll();
+        return;
+      }
       startIdle(1);
     },
 
@@ -192,6 +285,7 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     },
 
     dispose() {
+      if (fadeObserver) scene.onBeforeRenderObservable.remove(fadeObserver);
       stopAll();
       for (const group of groups) group.dispose();
       for (const skeleton of entries.skeletons || []) skeleton.dispose();

@@ -83,7 +83,8 @@ export function saveBlockCounts(counts) {
  * @typedef {{ rules:'basic'|'gimmick', play:'streak'|'level',
  *             role:'trapper'|'escape', difficulty:'easy'|'normal'|'hard',
  *             course:'trapper'|'escape', level:number, lang:string,
- *             fx:'high'|'medium'|'low' }} Settings
+ *             fx:'high'|'medium'|'low', catModel:'bengal'|'classic',
+ *             catAnim:boolean }} Settings
  */
 
 /** The device-appropriate default of the 演出 select (spec 17.1). */
@@ -110,6 +111,8 @@ export function loadSettings() {
     level: 1,
     lang: defaultLang(),
     fx: defaultFx(),
+    catModel: 'bengal',
+    catAnim: true,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -130,6 +133,8 @@ export function loadSettings() {
       level: Number.isInteger(s.level) && s.level >= 1 && s.level <= 20 ? s.level : 1,
       lang: typeof s.lang === 'string' && s.lang in STRINGS ? s.lang : fallback.lang,
       fx: ['high', 'medium', 'low'].includes(s.fx) ? s.fx : fallback.fx,
+      catModel: s.catModel === 'classic' ? 'classic' : 'bengal',
+      catAnim: s.catAnim !== false,
     };
   } catch {
     return fallback;
@@ -159,6 +164,8 @@ export function saveSettings(settings) {
         level: settings.level,
         lang: settings.lang,
         fx: settings.fx, // Rev. 6: the 演出 select (spec 17.1)
+        catModel: settings.catModel,
+        catAnim: settings.catAnim,
       }),
     );
   } catch {
@@ -194,6 +201,10 @@ export function createHud({ strings: initialStrings } = {}) {
     cameraSelect: el('camera-select'),
     fxLabel: el('fx-label'),
     fxSelect: el('fx-select'),
+    catModelLabel: el('cat-model-label'),
+    catModelSelect: el('cat-model-select'),
+    catAnimLabel: el('cat-anim-label'),
+    catAnimSelect: el('cat-anim-select'),
     langControl: el('lang-control'),
     langLabel: el('lang-label'),
     langSelect: el('lang-select'),
@@ -249,6 +260,10 @@ export function createHud({ strings: initialStrings } = {}) {
   let onCameraMode = null;
   /** @type {((fx:'high'|'medium'|'low') => void)|null} Rev. 6 */
   let onFxQuality = null;
+  /** @type {((model:'bengal'|'classic') => void)|null} */
+  let onCatModel = null;
+  /** @type {((on:boolean) => void)|null} */
+  let onCatAnimation = null;
   /** @type {((on:boolean) => void)|null} Rev. 6: double-armed edge ring */
   let onDoubleArmed = null;
   /** @type {(() => void)|null} Rev. 9: open the start wizard (menu button) */
@@ -366,6 +381,20 @@ export function createHud({ strings: initialStrings } = {}) {
       if (opt('medium')) opt('medium').textContent = t.fxMedium;
       if (opt('low')) opt('low').textContent = t.fxLow;
       dom.fxSelect.setAttribute('aria-label', t.fxLabel);
+    }
+    if (dom.catModelLabel) dom.catModelLabel.textContent = t.catModel;
+    if (dom.catModelSelect) {
+      const opt = (v) => dom.catModelSelect.querySelector(`option[value="${v}"]`);
+      if (opt('bengal')) opt('bengal').textContent = t.catModelBengal;
+      if (opt('classic')) opt('classic').textContent = t.catModelClassic;
+      dom.catModelSelect.setAttribute('aria-label', t.catModel);
+    }
+    if (dom.catAnimLabel) dom.catAnimLabel.textContent = t.catAnim;
+    if (dom.catAnimSelect) {
+      const opt = (v) => dom.catAnimSelect.querySelector(`option[value="${v}"]`);
+      if (opt('on')) opt('on').textContent = t.catAnimOn;
+      if (opt('off')) opt('off').textContent = t.catAnimOff;
+      dom.catAnimSelect.setAttribute('aria-label', t.catAnim);
     }
     if (dom.langLabel) dom.langLabel.textContent = t.langLabel;
     if (dom.dashBtn) dom.dashBtn.textContent = t.dash;
@@ -746,6 +775,8 @@ export function createHud({ strings: initialStrings } = {}) {
      *          onStart?: () => void,
      *          onCameraMode?: (mode:'perspective'|'ortho') => void,
      *          onFxQuality?: (fx:'high'|'medium'|'low') => void,
+     *          onCatModel?: (model:'bengal'|'classic') => void,
+     *          onCatAnimation?: (on:boolean) => void,
      *          onDoubleArmed?: (on:boolean) => void,
      *          onMenu?: () => void}} deps
      */
@@ -756,6 +787,8 @@ export function createHud({ strings: initialStrings } = {}) {
       onStart: start,
       onCameraMode: cam,
       onFxQuality: fxq,
+      onCatModel: cm,
+      onCatAnimation: ca,
       onDoubleArmed: dmx,
       onMenu: menu,
     }) {
@@ -765,6 +798,8 @@ export function createHud({ strings: initialStrings } = {}) {
       onStart = start || null;
       onCameraMode = cam || null;
       onFxQuality = fxq || null;
+      onCatModel = cm || null;
+      onCatAnimation = ca || null;
       onDoubleArmed = dmx || null;
       onMenu = menu || null;
 
@@ -850,6 +885,23 @@ export function createHud({ strings: initialStrings } = {}) {
           settings.fx = ['high', 'medium', 'low'].includes(v) ? v : 'medium';
           persist();
           if (onFxQuality) onFxQuality(settings.fx);
+        });
+      }
+      if (dom.catModelSelect) {
+        dom.catModelSelect.value = settings.catModel;
+        dom.catModelSelect.addEventListener('change', () => {
+          settings.catModel =
+            dom.catModelSelect.value === 'classic' ? 'classic' : 'bengal';
+          persist();
+          if (onCatModel) onCatModel(settings.catModel);
+        });
+      }
+      if (dom.catAnimSelect) {
+        dom.catAnimSelect.value = settings.catAnim ? 'on' : 'off';
+        dom.catAnimSelect.addEventListener('change', () => {
+          settings.catAnim = dom.catAnimSelect.value !== 'off';
+          persist();
+          if (onCatAnimation) onCatAnimation(settings.catAnim);
         });
       }
       if (dom.langSelect) {

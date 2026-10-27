@@ -1,7 +1,8 @@
 /**
- * The cat: the Bengal cat GLB (src/render/catModel.js) with hop / slide /
- * arc / tunnel (shrink+grow) / escape / caught animations, driven by
- * `scene.onBeforeRenderObservable`. The procedural cat below is the
+ * The cat: the Bengal cat GLB (src/render/catModel.js) or the original
+ * procedural cat (`model: 'classic'`) with hop / slide / arc / tunnel
+ * (shrink+grow) / escape / caught animations, driven by
+ * `scene.onBeforeRenderObservable`. The procedural cat is also the
  * fail-soft stand-in until the GLB has loaded (and if loading fails), so a
  * missing model never blocks the game. One instance per cat (spec 13.7).
  *
@@ -59,8 +60,11 @@ function makeMaterial(scene, name, hex, emissive = 0.35) {
  * @param {import('@babylonjs/core/scene.js').Scene} scene
  * @param {string} [colorHex] fur color (default: the first cat color)
  * @param {number} [index] cat index, used in mesh names
+ * @param {{model?:'bengal'|'classic', animate?:boolean}} [opts]
  */
-export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
+export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts = {}) {
+  const useModel = opts.model !== 'classic';
+  let animated = opts.animate !== false;
   const fur = makeMaterial(scene, `catFur-${index}`, colorHex);
   const black = makeMaterial(scene, `catBlack-${index}`, '#1a1a1a', 0.1);
 
@@ -118,18 +122,20 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
   /** @type {Awaited<ReturnType<typeof loadCatModel>>|null} */
   let model = null;
   let disposed = false;
-  loadCatModel(scene, root, index, BASE_SCALE, MODEL_FOOT_LOCAL_Y)
-    .then((loaded) => {
-      if (!loaded) return;
-      if (disposed) {
-        loaded.dispose();
-        return;
-      }
-      model = loaded;
-      for (const p of parts) p.visibility = 0; // the procedural stand-in is done
-      model.playIdle();
-    })
-    .catch((err) => fxWarnOnce('catView.model', err));
+  if (useModel) {
+    loadCatModel(scene, root, index, BASE_SCALE, MODEL_FOOT_LOCAL_Y)
+      .then((loaded) => {
+        if (!loaded) return;
+        if (disposed) {
+          loaded.dispose();
+          return;
+        }
+        model = loaded;
+        model.setAnimated(animated);
+        for (const p of parts) p.visibility = 0; // the procedural stand-in is done
+      })
+      .catch((err) => fxWarnOnce('catView.model', err));
+  }
 
   /** @type {{kind:string, t:number, dur:number, from?:any, to?:any, yaw?:number,
    *           dir?:any, cells?:number[], points?:any[], done?:Function,
@@ -159,6 +165,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
 
   /** Idle life + ghost fade; runs every frame while nothing is animating. */
   function idleTick(dt) {
+    if (!animated) return;
     if (model) {
       // The GLB idle loop already breathes / sways its tail. Only keep
       // the hover look: turn the whole model slightly toward the cell.
@@ -387,6 +394,24 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
     },
 
     /**
+     * Turn the cat's idle / model animation on or off; the gameplay
+     * transform (hop arc, slide, tunnel scale) still runs.
+     * @param {boolean} on
+     */
+    setAnimated(on) {
+      animated = !!on;
+      if (model) model.setAnimated(animated);
+      if (!animated) {
+        lookYaw = 0;
+        if (model) model.setLookYaw(0);
+        if (!anim) root.scaling.y = BASE_SCALE * baseSquash;
+        tail.rotation.z = 0;
+        ears[0].rotation.z = 0.25;
+        ears[1].rotation.z = -0.25;
+      }
+    },
+
+    /**
      * Rev. 6 (17.2): two small celebration bounces in place.
      * @returns {Promise<void>}
      */
@@ -447,7 +472,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       return new Promise((resolve) => {
         const a = cellWorld(board, from);
         const b = cellWorld(board, to);
-        if (model) model.playMove('hop');
+        if (model) model.playMove('walk');
         anim = {
           kind: 'hop',
           t: 0,
@@ -474,7 +499,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       return new Promise((resolve) => {
         const a = cellWorld(board, from);
         const b = cellWorld(board, to);
-        if (model) model.playMove('arc');
+        if (model) model.playMove('jump');
         anim = {
           kind: 'arc',
           t: 0,

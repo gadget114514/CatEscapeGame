@@ -22,6 +22,12 @@ const IDS = [
   'blocks-value',
   'camera-label',
   'camera-select',
+  'fx-label',
+  'fx-select',
+  'cat-model-label',
+  'cat-model-select',
+  'cat-anim-label',
+  'cat-anim-select',
   'lang-control',
   'lang-label',
   'lang-select',
@@ -202,5 +208,47 @@ describe('hud status line: the trapper block budget (18.2)', () => {
 
   it('the ja table carries the exact spec wording', () => {
     expect(STRINGS.ja.blocksLeftLine).toBe('あと {n} 個置ける');
+  });
+});
+
+describe('hud cat model / animation selects', () => {
+  afterEach(() => {
+    delete globalThis.document;
+  });
+
+  /** The first `change` listener registered on an element. */
+  function changeOf(el) {
+    const call = el.addEventListener.mock.calls.find((c) => c[0] === 'change');
+    return call[1];
+  }
+
+  it('applies both changes live and never restarts the game', () => {
+    const byId = stubDocument();
+    const hud = createHud({ strings: STRINGS.en });
+    const onStart = vi.fn();
+    const onCatModel = vi.fn();
+    const onCatAnimation = vi.fn();
+    hud.attach({
+      controller: stubController(null),
+      getProgress: () => null,
+      onStart,
+      onCatModel,
+      onCatAnimation,
+    });
+
+    expect(byId['cat-model-label'].textContent).toBe(STRINGS.en.catModel);
+    expect(byId['cat-model-select'].value).toBe('bengal');
+    byId['cat-model-select'].value = 'classic';
+    changeOf(byId['cat-model-select'])();
+    expect(onCatModel).toHaveBeenCalledWith('classic');
+    expect(hud.getSettings().catModel).toBe('classic');
+
+    expect(byId['cat-anim-select'].value).toBe('on');
+    byId['cat-anim-select'].value = 'off';
+    changeOf(byId['cat-anim-select'])();
+    expect(onCatAnimation).toHaveBeenCalledWith(false);
+    expect(hud.getSettings().catAnim).toBe(false);
+
+    expect(onStart).not.toHaveBeenCalled();
   });
 });

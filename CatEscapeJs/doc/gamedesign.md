@@ -2536,3 +2536,21 @@ debug-only, not the play flow.
   the idle clip slowly with a sad forward tilt. The old procedural cat
   remains only as the fail-soft stand-in until the GLB has loaded (or if
   loading fails).
+
+## Implementation notes (cat model options / animation)
+
+- The cat visual is selectable in the play bar: `bengal` (the GLB) or
+  `classic` (the original procedural cat). The choice is stored as
+  `catModel` in `catescape.settings` and applied without restarting the
+  game (`view.setCatModel` rebuilds the current cat roots).
+- `catAnim` (on by default) turns the cats' idle / skeletal animation on
+  or off from the play bar; gameplay transforms (hop arc, slide, tunnel
+  scale, run-off) still play so moves stay readable.
+- The Bengal is normalised to `TARGET_LENGTH = 1.7` (2× the previous
+  0.85 footprint).
+- The idle clip uses `ANIMATIONLOOPMODE_YOYO` (forward → reverse) instead
+  of snapping back to frame 0. Idle and walk cross-fade over 180 ms by
+  animatable weight; the walk clip is the only movement clip in the GLB,
+  so hop maps to `walk` and spring/arc/jump map to `jump` (same clip,
+  faster speed ratio).
+- All Bengal clips use `SPEED_SCALE = 0.5`.

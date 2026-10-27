@@ -108,6 +108,8 @@ describe('settings persistence', () => {
       level: 1,
       lang: defaultLang,
       fx: defaultFx,
+      catModel: 'bengal',
+      catAnim: true,
     });
   });
 
@@ -122,11 +124,15 @@ describe('settings persistence', () => {
       level: 7,
       lang: 'en',
       fx: 'low',
+      catModel: 'classic',
+      catAnim: false,
     };
     saveSettings(settings);
     expect(loadSettings()).toEqual(settings);
     const raw = globalThis.localStorage.getItem('catescape.settings');
     expect(Object.keys(JSON.parse(raw)).sort()).toEqual([
+      'catAnim',
+      'catModel',
       'course',
       'difficulty',
       'fx',
@@ -171,6 +177,8 @@ describe('settings persistence', () => {
         course: 'nope',
         level: 99,
         lang: 'xx',
+        catModel: 'other',
+        catAnim: 'yes',
       }),
     });
     expect(loadSettings()).toEqual({
@@ -182,6 +190,8 @@ describe('settings persistence', () => {
       level: 1,
       lang: defaultLang,
       fx: defaultFx,
+      catModel: 'bengal',
+      catAnim: true,
     });
     stubStorage({ 'catescape.settings': 'not json {' });
     expect(loadSettings().rules).toBe('basic');

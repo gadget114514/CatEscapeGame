@@ -29,8 +29,12 @@ import { createStartWizard } from './ui/startWizard.js';
 
 const canvas = document.getElementById('game-canvas');
 const { engine, scene, camera, setCameraMode } = createScene(canvas);
-const view = createView(scene);
 const hud = createHud();
+const initialSettings = hud.getSettings();
+const view = createView(scene, {
+  catModel: initialSettings.catModel,
+  catAnimate: initialSettings.catAnim,
+});
 const introCard = createIntroCard();
 
 // Rev. 9: the wizard is the single entry — settings chosen there are
@@ -193,6 +197,8 @@ hud.attach({
   onStart: startGame,
   onCameraMode,
   onFxQuality: (q) => view.setFxQuality(q), // Rev. 6 (17.1)
+  onCatModel: (m) => view.setCatModel(m),
+  onCatAnimation: (on) => view.setCatAnimation(on),
   onDoubleArmed: (on) => view.setDoubleArmed(on), // Rev. 6 (17.3)
   onMenu: () => {
     pendingWizardCfg = null;

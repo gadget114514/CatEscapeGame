@@ -49,7 +49,8 @@ function nullFx() {
 
 /**
  * @param {import('@babylonjs/core/scene.js').Scene} scene
- * @param {{quality?: string}} [opts] initial fx quality (Rev. 6)
+ * @param {{quality?: string, catModel?: 'bengal'|'classic',
+ *          catAnimate?: boolean}} [opts] initial fx / cat options (Rev. 6)
  */
 export function createView(scene, opts = {}) {
   /** @type {ReturnType<typeof createFxManager>} */
@@ -70,6 +71,8 @@ export function createView(scene, opts = {}) {
   let catCells = [];
   /** Total cats the current game started with (roots are built for it). */
   let catTotal = 1;
+  let catModel = opts.catModel === 'classic' ? 'classic' : 'bengal';
+  let catAnimate = opts.catAnimate !== false;
 
   // soft ring under the selected cat (spec 13.7)
   const ringMat = new StandardMaterial('catSelectRing', scene);
@@ -109,7 +112,10 @@ export function createView(scene, opts = {}) {
     catTotal = n;
     const cats = s.cats && s.cats.length > 0 ? s.cats : [s.board.cat];
     for (let j = 0; j < n; j++) {
-      const view = createCatView(scene, CAT_COLORS[j % CAT_COLORS.length], j);
+      const view = createCatView(scene, CAT_COLORS[j % CAT_COLORS.length], j, {
+        model: catModel,
+        animate: catAnimate,
+      });
       if (j < cats.length) {
         view.place(s.board, cats[j]);
         catCells[j] = cats[j];
@@ -218,6 +224,27 @@ export function createView(scene, opts = {}) {
     setFxQuality(quality) {
       fx.setQuality(quality);
       boardView.setTileShader(hasTileShader(fx.quality));
+    },
+
+    /**
+     * Switch the cat visual (`bengal` GLB or the original procedural cat)
+     * without restarting the game.
+     * @param {'bengal'|'classic'} model
+     */
+    setCatModel(model) {
+      const next = model === 'classic' ? 'classic' : 'bengal';
+      if (next === catModel) return;
+      catModel = next;
+      if (state) buildCats(state);
+    },
+
+    /**
+     * Turn the cats' idle / skeletal animation on or off.
+     * @param {boolean} on
+     */
+    setCatAnimation(on) {
+      catAnimate = !!on;
+      for (const view of catViews) view.setAnimated(catAnimate);
     },
 
     /**
