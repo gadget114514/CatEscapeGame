@@ -2520,3 +2520,19 @@ debug-only, not the play flow.
   `onOpenLevels(cfg)` payload, はじめる → `onNewGame(cfg)` and the
   root summary. `npm test` passes except a pre-existing wall-clock
   perf flake under the git-ignored `.claude/worktrees/` copy.
+
+## Implementation notes (Bengal cat GLB)
+
+- The cat visual is now `3d/bengal_cat_non_commercial.glb` (CC BY 4.0,
+  osmanarici2004_1). It is loaded with `@babylonjs/loaders` and inlined
+  (`?inline`) so the Electron `file://` build can load it without XHR.
+- The export contains one merged 10.07 s clip rather than named clips.
+  We use **8.00-10.05 s as the idle loop** and **1.55-7.98 s as the walk
+  loop** (the author baked a walk around a circle). The root
+  translation / yaw tracks are dropped so the walk plays in place;
+  `catView` still owns the hop / slide / arc / tunnel / run-off transform.
+- Movement uses the walk clip at a move-dependent speed. `catWin` plays
+  the walk clip fast for the celebration + run-off; `trapperWin` plays
+  the idle clip slowly with a sad forward tilt. The old procedural cat
+  remains only as the fail-soft stand-in until the GLB has loaded (or if
+  loading fails).

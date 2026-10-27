@@ -7,6 +7,7 @@ const runningPerf = process.argv.some((a) => String(a).includes('test/perf'));
 
 export default defineConfig({
   base: './',
+  assetsInclude: ['**/*.glb'],
   build: {
     outDir: 'dist',
   },

@@ -1,13 +1,14 @@
 /**
- * The cat: a small procedural model (no external assets) with hop / slide /
+ * The cat: the Bengal cat GLB (src/render/catModel.js) with hop / slide /
  * arc / tunnel (shrink+grow) / escape / caught animations, driven by
- * `scene.onBeforeRenderObservable`. One instance per cat (spec 13.7):
- * the fur color distinguishes the cats (`#f39c34`, grey, white).
+ * `scene.onBeforeRenderObservable`. The procedural cat below is the
+ * fail-soft stand-in until the GLB has loaded (and if loading fails), so a
+ * missing model never blocks the game. One instance per cat (spec 13.7).
  *
- * Rev. 6 (spec 17.2): anticipation squash + air stretch + elastic landing
- * on every hop, idle life (breathing, tail sway, seeded ear twitches,
- * head turning toward the hovered cell), a speed-line `TrailMesh` and
- * fading ghosts on the escape run, and ear-droop when trapped.
+ * The GLB owns the idle / walk loops; catView still owns the gameplay
+ * transform (hop arc, slide, tunnel scale, run-off fade), the selection
+ * look and the trail / ghosts. Rev. 6 extras: squash + stretch on the
+ * hop, speed-line `TrailMesh`, fading ghosts, and the caught mood.
  */
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder.js';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder.js';
@@ -15,7 +16,8 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh.js';
-import { cellPos, CELL_SIZE, CELL_GAP } from './boardView.js';
+import { cellPos, CELL_SIZE, CELL_GAP, CELL_HEIGHT } from './boardView.js';
+import { loadCatModel } from './catModel.js';
 import { easeOutElastic, lerp } from './fx/tween.js';
 import { fxWarnOnce } from './fx/fxLog.js';
 
@@ -38,6 +40,8 @@ const TWITCH_MAX_MS = 6000;
 const TWITCH_MS = 180;
 const HAPPY_HOP_MS = 320; // the escape celebration hop (17.2)
 const GHOST_MS = 320; // dash afterimage lifetime (17.2)
+// The GLB's feet sit on the cell top (CELL_HEIGHT / 2), like the procedural cat.
+const MODEL_FOOT_LOCAL_Y = (CELL_HEIGHT / 2 - BASE_Y) / BASE_SCALE;
 
 /** Fur colors for the 1–3 cats (spec 13.7). */
 export const CAT_COLORS = ['#f39c34', '#9aa5b1', '#ffffff'];
@@ -111,6 +115,22 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
     eye.position.set(side * 0.12, 0.7, 0.65);
   }
 
+  /** @type {Awaited<ReturnType<typeof loadCatModel>>|null} */
+  let model = null;
+  let disposed = false;
+  loadCatModel(scene, root, index, BASE_SCALE, MODEL_FOOT_LOCAL_Y)
+    .then((loaded) => {
+      if (!loaded) return;
+      if (disposed) {
+        loaded.dispose();
+        return;
+      }
+      model = loaded;
+      for (const p of parts) p.visibility = 0; // the procedural stand-in is done
+      model.playIdle();
+    })
+    .catch((err) => fxWarnOnce('catView.model', err));
+
   /** @type {{kind:string, t:number, dur:number, from?:any, to?:any, yaw?:number,
    *           dir?:any, cells?:number[], points?:any[], done?:Function,
    *           squash?:number}|null} */
@@ -123,6 +143,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
   /** @type {{x:number, z:number}|null} hovered cell for the head turn (17.2) */
   let lookTarget = null;
   let lookYaw = 0;
+  let caught = false;
   /** @type {TrailMesh|null} speed-line trail for the escape run (17.2) */
   let trail = null;
   /** @type {Array<{root: TransformNode, mat: StandardMaterial, parts: any[], age: number}>} */
@@ -138,6 +159,23 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
 
   /** Idle life + ghost fade; runs every frame while nothing is animating. */
   function idleTick(dt) {
+    if (model) {
+      // The GLB idle loop already breathes / sways its tail. Only keep
+      // the hover look: turn the whole model slightly toward the cell.
+      if (!caught) model.playIdle();
+      if (lookTarget) {
+        const want = Math.atan2(lookTarget.x - root.position.x, lookTarget.z - root.position.z);
+        let delta = want - root.rotation.y;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const clamped = Math.max(-0.75, Math.min(0.75, delta));
+        lookYaw += (clamped - lookYaw) * Math.min(1, dt / 120);
+      } else {
+        lookYaw += (0 - lookYaw) * Math.min(1, dt / 150);
+      }
+      model.setLookYaw(lookYaw);
+      return;
+    }
     idleClock += dt;
     // breathing (scale y ±2 %, 2.4 s)
     const breath = 1 + 0.02 * Math.sin((idleClock / BREATH_MS) * Math.PI * 2);
@@ -173,6 +211,15 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       lookYaw += (0 - lookYaw) * Math.min(1, dt / 150);
       head.rotation.y = lookYaw;
     }
+  }
+
+  /** Fade the visible cat (GLB once loaded, procedural before that). */
+  function setVisualVisibility(v) {
+    if (model) {
+      model.setVisibility(v);
+      return;
+    }
+    for (const p of parts) p.visibility = v;
   }
 
   function ghostTick(dt) {
@@ -243,8 +290,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
         root.position.y = BASE_Y + 0.2 * t + 0.15 * Math.abs(Math.sin(Math.PI * t * 4));
         root.rotation.y = anim.yaw;
         root.scaling.y = BASE_SCALE * (1 + 0.08 * Math.sin(Math.PI * t * 4));
-        const v = 1 - t;
-        for (const p of parts) p.visibility = v;
+        setVisualVisibility(1 - t);
       } else if (anim.kind === 'sit') {
         root.rotation.z = 0.25 * Math.sin(Math.PI * 2 * SHAKE_COUNT * t) * (1 - t);
       }
@@ -304,6 +350,13 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       root.scaling.set(BASE_SCALE, BASE_SCALE, BASE_SCALE);
       root.rotation.set(0, 0, 0);
       lookTarget = null;
+      lookYaw = 0;
+      caught = false;
+      if (model) {
+        model.resetMood();
+        model.setLookYaw(0);
+        model.setVisibility(1);
+      }
       const p = cellWorld(board, index);
       root.position.set(p.x, p.y, p.z);
     },
@@ -314,7 +367,15 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       baseSquash = 1;
       root.rotation.set(0, 0, 0);
       root.scaling.set(BASE_SCALE, BASE_SCALE, BASE_SCALE);
-      for (const p of parts) p.visibility = 1;
+      lookYaw = 0;
+      caught = false;
+      if (model) {
+        model.resetMood();
+        model.setLookYaw(0);
+        model.setVisibility(1);
+      } else {
+        for (const p of parts) p.visibility = 1;
+      }
     },
 
     /**
@@ -331,6 +392,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
      */
     happyHop() {
       return new Promise((resolve) => {
+        if (model) model.playMove('happy');
         anim = { kind: 'happy', t: 0, dur: HAPPY_HOP_MS, done: resolve };
       });
     },
@@ -385,6 +447,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       return new Promise((resolve) => {
         const a = cellWorld(board, from);
         const b = cellWorld(board, to);
+        if (model) model.playMove('hop');
         anim = {
           kind: 'hop',
           t: 0,
@@ -411,6 +474,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
       return new Promise((resolve) => {
         const a = cellWorld(board, from);
         const b = cellWorld(board, to);
+        if (model) model.playMove('arc');
         anim = {
           kind: 'arc',
           t: 0,
@@ -442,6 +506,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
         }
         const points = cells.map((c) => cellWorld(board, c));
         const last = points[points.length - 1];
+        if (model) model.playMove('slide');
         anim = {
           kind: 'slide',
           t: 0,
@@ -463,6 +528,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
      */
     shrink() {
       return new Promise((resolve) => {
+        if (model) model.playMove('tunnel');
         anim = {
           kind: 'scale',
           t: 0,
@@ -483,6 +549,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
      */
     grow() {
       return new Promise((resolve) => {
+        if (model) model.playMove('tunnel');
         anim = {
           kind: 'scale',
           t: 0,
@@ -513,6 +580,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
         dz /= len;
         // Fail-soft (task 26): a broken trail only loses the speed lines,
         // never the escape run-off itself.
+        if (model) model.playMove('run');
         try {
           if (!trail) {
             trail = new TrailMesh(`catTrail-${index}`, body, scene, 0.22, 40, false);
@@ -558,6 +626,8 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
      */
     sit() {
       return new Promise((resolve) => {
+        caught = true;
+        if (model) model.playLose();
         anim = {
           kind: 'sit',
           t: 0,
@@ -577,7 +647,12 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0) {
     },
 
     dispose() {
+      disposed = true;
       anim = null;
+      if (model) {
+        model.dispose();
+        model = null;
+      }
       if (trail) {
         trail.dispose();
         trail = null;

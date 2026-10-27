@@ -29,7 +29,8 @@
     }
   },
   "dependencies": {
-    "@babylonjs/core": "^8.0.0"
+    "@babylonjs/core": "^8.0.0",
+    "@babylonjs/loaders": "^8.56.2"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",

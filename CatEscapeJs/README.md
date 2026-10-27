@@ -106,3 +106,10 @@ The build uses `base: './'`, so it also works from a sub-path
 `electron/main.cjs` runs with `contextIsolation: true` / `nodeIntegration: false`.
 `npm run electron` loads `dist/index.html`; `npm run electron:dev` loads the dev
 server via `VITE_DEV_SERVER_URL`.
+
+## Credits / クレジット
+
+- Cat 3D model: **"Bengal Cat Non Commercial"** by
+  [osmanarici2004_1](https://sketchfab.com/osmanarici2004_1) — licensed under
+  [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
+  Source: <https://sketchfab.com/3d-models/bengal-cat-non-commercial-ad99670274254e4aa539a90a5dbdb24e>
