@@ -2548,9 +2548,17 @@ debug-only, not the play flow.
   scale, run-off) still play so moves stay readable.
 - The Bengal is normalised to `TARGET_LENGTH = 1.7` (2× the previous
   0.85 footprint).
-- The idle clip uses `ANIMATIONLOOPMODE_YOYO` (forward → reverse) instead
-  of snapping back to frame 0. Idle and walk cross-fade over 180 ms by
-  animatable weight; the walk clip is the only movement clip in the GLB,
-  so hop maps to `walk` and spring/arc/jump map to `jump` (same clip,
-  faster speed ratio).
+- The idle clip is not looped directly (that snapped back to frame 0 at
+  the seam, and YOYO did not blend it either). Two idle instances play
+  the clip; `SEAM_MS` (450 ms) before the end, the other instance starts
+  at the first frame and the two cross-fade by animatable weight, so the
+  end pose slowly blends into the start pose. `SEAM_MARGIN_MS` (100 ms)
+  finishes the blend before the clip loops.
+- Idle and walk cross-fade over 180 ms by animatable weight; the walk
+  clip is the only movement clip in the GLB, so hop maps to `walk` and
+  spring/arc/jump map to `jump` (same clip, faster speed ratio).
 - All Bengal clips use `SPEED_SCALE = 0.5`.
+- The Bengal cat casts a soft blob shadow (a radial-gradient `DynamicTexture`
+  disc on the cell top). It only appears once the GLB has loaded, tracks the
+  cat's position / yaw, shrinks and fades while the cat is airborne, and is
+  disposed with the cat view. The classic procedural cat has no shadow.

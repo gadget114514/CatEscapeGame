@@ -13,8 +13,11 @@
  */
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder.js';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder.js';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder.js';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture.js';
+import '@babylonjs/core/Engines/Extensions/engine.dynamicTexture.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh.js';
 import { cellPos, CELL_SIZE, CELL_GAP, CELL_HEIGHT } from './boardView.js';
@@ -43,9 +46,70 @@ const HAPPY_HOP_MS = 320; // the escape celebration hop (17.2)
 const GHOST_MS = 320; // dash afterimage lifetime (17.2)
 // The GLB's feet sit on the cell top (CELL_HEIGHT / 2), like the procedural cat.
 const MODEL_FOOT_LOCAL_Y = (CELL_HEIGHT / 2 - BASE_Y) / BASE_SCALE;
+// Bengal blob shadow: just above the hover lift (0.08) to avoid z-fighting.
+const SHADOW_Y = CELL_HEIGHT / 2 + 0.085;
+const SHADOW_RADIUS_X = 0.42;
+const SHADOW_RADIUS_Z = 0.78;
 
 /** Fur colors for the 1–3 cats (spec 13.7). */
 export const CAT_COLORS = ['#f39c34', '#9aa5b1', '#ffffff'];
+
+/**
+ * Soft radial blob shadow for the Bengal cat (no external texture: the
+ * gradient is drawn into a DynamicTexture). Returns null on failure so a
+ * broken shadow can never stop the cat from loading.
+ * @param {import('@babylonjs/core/scene.js').Scene} scene
+ * @param {number} index
+ */
+function makeShadow(scene, index) {
+  try {
+    const size = 128;
+    const tex = new DynamicTexture(
+      `catShadowTex-${index}`,
+      { width: size, height: size },
+      scene,
+      false,
+    );
+    tex.hasAlpha = true;
+    const ctx = tex.getContext();
+    const gradient = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      0,
+      size / 2,
+      size / 2,
+      size / 2,
+    );
+    gradient.addColorStop(0, 'rgba(0,0,0,0.62)');
+    gradient.addColorStop(0.55, 'rgba(0,0,0,0.28)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    tex.update();
+
+    const mat = new StandardMaterial(`catShadowMat-${index}`, scene);
+    mat.diffuseTexture = tex;
+    mat.opacityTexture = tex;
+    mat.diffuseColor = Color3.Black();
+    mat.specularColor = Color3.Black();
+    mat.disableLighting = true;
+    mat.backFaceCulling = false;
+
+    const pivot = new TransformNode(`catShadowPivot-${index}`, scene);
+    pivot.position.y = SHADOW_Y;
+    const disc = CreateDisc(`catShadow-${index}`, { radius: 1, tessellation: 32 }, scene);
+    disc.rotation.x = Math.PI / 2;
+    disc.scaling.set(SHADOW_RADIUS_X, SHADOW_RADIUS_Z, 1);
+    disc.material = mat;
+    disc.isPickable = false;
+    disc.parent = pivot;
+    pivot.setEnabled(false);
+    return { pivot, disc, mat, tex };
+  } catch (err) {
+    fxWarnOnce('catView.shadow', err);
+    return null;
+  }
+}
 
 function makeMaterial(scene, name, hex, emissive = 0.35) {
   const mat = new StandardMaterial(name, scene);
@@ -119,6 +183,29 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
     eye.position.set(side * 0.12, 0.7, 0.65);
   }
 
+  let shadow = useModel ? makeShadow(scene, index) : null;
+  let visible = true;
+  let visualAlpha = 1;
+
+  /** The Bengal shadow only shows once its GLB is actually on screen. */
+  function updateShadowEnabled() {
+    if (shadow) shadow.pivot.setEnabled(visible && !!model);
+  }
+
+  /** Keep the blob shadow on the ground under the (possibly airborne) cat. */
+  function shadowTick() {
+    if (!shadow || !shadow.pivot.isEnabled()) return;
+    const pivot = shadow.pivot;
+    pivot.position.x = root.position.x;
+    pivot.position.z = root.position.z;
+    pivot.rotation.y = root.rotation.y;
+    const footprint = Math.max(0.01, root.scaling.x / BASE_SCALE);
+    const lift = Math.max(0, root.position.y - BASE_Y);
+    const shrink = Math.max(0.55, 1 - lift * 0.22);
+    pivot.scaling.set(footprint * shrink, 1, footprint * shrink);
+    shadow.mat.alpha = visualAlpha * Math.max(0.25, 1 - lift * 0.45);
+  }
+
   /** @type {Awaited<ReturnType<typeof loadCatModel>>|null} */
   let model = null;
   let disposed = false;
@@ -133,6 +220,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
         model = loaded;
         model.setAnimated(animated);
         for (const p of parts) p.visibility = 0; // the procedural stand-in is done
+        updateShadowEnabled();
       })
       .catch((err) => fxWarnOnce('catView.model', err));
   }
@@ -222,6 +310,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
 
   /** Fade the visible cat (GLB once loaded, procedural before that). */
   function setVisualVisibility(v) {
+    visualAlpha = v;
     if (model) {
       model.setVisibility(v);
       return;
@@ -255,6 +344,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
     try {
       const dt = scene.getEngine().getDeltaTime();
       ghostTick(dt);
+      shadowTick();
       if (!anim) {
         idleTick(dt);
         return;
@@ -359,6 +449,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
       lookTarget = null;
       lookYaw = 0;
       caught = false;
+      visualAlpha = 1;
       if (model) {
         model.resetMood();
         model.setLookYaw(0);
@@ -366,6 +457,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
       }
       const p = cellWorld(board, index);
       root.position.set(p.x, p.y, p.z);
+      shadowTick();
     },
 
     /** Reset appearance after a finished game (fade / squash). */
@@ -376,6 +468,7 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
       root.scaling.set(BASE_SCALE, BASE_SCALE, BASE_SCALE);
       lookYaw = 0;
       caught = false;
+      visualAlpha = 1;
       if (model) {
         model.resetMood();
         model.setLookYaw(0);
@@ -383,6 +476,8 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
       } else {
         for (const p of parts) p.visibility = 1;
       }
+      shadowTick();
+      updateShadowEnabled();
     },
 
     /**
@@ -455,10 +550,12 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
     },
 
     /**
-     * @param {boolean} visible escaped cats are hidden (spec 13.7)
+     * @param {boolean} on escaped cats are hidden (spec 13.7)
      */
-    setVisible(visible) {
+    setVisible(on) {
+      visible = !!on;
       root.setEnabled(visible);
+      updateShadowEnabled();
     },
 
     /**
@@ -677,6 +774,13 @@ export function createCatView(scene, colorHex = CAT_COLORS[0], index = 0, opts =
       if (model) {
         model.dispose();
         model = null;
+      }
+      if (shadow) {
+        shadow.disc.dispose();
+        shadow.pivot.dispose();
+        shadow.mat.dispose();
+        shadow.tex.dispose();
+        shadow = null;
       }
       if (trail) {
         trail.dispose();
