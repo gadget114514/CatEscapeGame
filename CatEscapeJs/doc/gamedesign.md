@@ -2548,12 +2548,11 @@ debug-only, not the play flow.
   scale, run-off) still play so moves stay readable.
 - The Bengal is normalised to `TARGET_LENGTH = 1.7` (2× the previous
   0.85 footprint).
-- The idle clip is not looped directly (that snapped back to frame 0 at
-  the seam, and YOYO did not blend it either). Two idle instances play
-  the clip; `SEAM_MS` (450 ms) before the end, the other instance starts
-  at the first frame and the two cross-fade by animatable weight, so the
-  end pose slowly blends into the start pose. `SEAM_MARGIN_MS` (100 ms)
-  finishes the blend before the clip loops.
+- The idle clip uses `ANIMATIONLOOPMODE_YOYO`: it plays forward to the
+  last frame and then reverses back, so it never jumps from the end to
+  frame 0. Babylon evaluates YOYO with `from` treated as 0, so the idle
+  clip is rebuilt with its keys shifted from 8.0 s to frame 0 (otherwise
+  the reverse started at the wrong phase).
 - Idle and walk cross-fade over 180 ms by animatable weight; the walk
   clip is the only movement clip in the GLB, so hop maps to `walk` and
   spring/arc/jump map to `jump` (same clip, faster speed ratio).

@@ -9,13 +9,11 @@
  * translation / yaw is removed so the cat walks in place; catView keeps
  * driving the gameplay transform (hop / slide / arc / run-off).
  *
- * The idle clip is looped by overlapping two idle instances: shortly
- * before one instance reaches its end, the other starts at the first
- * frame and the two cross-fade, so the end pose blends into the start
- * pose instead of snapping back to index 0 (YOYO did not blend the seam).
- * Idle and walk are also cross-faded by animatable weight over FADE_MS,
- * so every move blends back into the idle pose. All clips run at
- * SPEED_SCALE (half speed).
+ * The idle clip loops with Babylon's YOYO mode: it plays forward to the
+ * end, then reverses back to the first frame instead of snapping to
+ * index 0. Idle and walk are cross-faded by animatable weight over
+ * FADE_MS, so every move blends back into the idle pose. All clips run
+ * at SPEED_SCALE (half speed).
  *
  * The GLB is inlined (`?inline`) so the model also loads from file:// in
  * the Electron build, where XHR to a local asset URL is blocked.
@@ -23,6 +21,8 @@
 import catModelUrl from '../../3d/bengal_cat_non_commercial.glb?inline';
 import { LoadAssetContainerAsync } from '@babylonjs/core/Loading/sceneLoader.js';
 import '@babylonjs/loaders/glTF/index.js';
+import { Animation } from '@babylonjs/core/Animations/animation.js';
+import { AnimationGroup } from '@babylonjs/core/Animations/animationGroup.js';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { fxWarnOnce } from './fx/fxLog.js';
@@ -33,8 +33,6 @@ const WALK_RANGE = [1.55, 7.98];
 const TARGET_LENGTH = 1.7; // 2× the old footprint
 const SPEED_SCALE = 0.5; // all clips play at half speed
 const FADE_MS = 180; // idle ↔ walk cross-fade
-const SEAM_MS = 450; // idle end → first-frame blend
-const SEAM_MARGIN_MS = 100; // finish the seam blend before the clip loops
 
 /** @type {WeakMap<import('@babylonjs/core/scene.js').Scene, Promise<any>>} */
 const templates = new WeakMap();
@@ -117,12 +115,21 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     ? base.targetedAnimations[0].animation.framePerSecond
     : 60;
   const frames = (seconds) => seconds * fps;
-  // Two idle instances so the end of one can cross-fade into the start of
-  // the other. Cloning the animations keeps both runtime timelines apart.
-  const idleA = base.clone(`catModelIdleA-${index}`, undefined, true);
-  const idleB = base.clone(`catModelIdleB-${index}`, undefined, true);
+  // Babylon's YOYO evaluates `from` as 0, so build the idle clip with its
+  // keys shifted back to frame 0. With the original 8.0 s offset the
+  // reverse pass started at the wrong phase and looked like a snap.
+  const idleStartFrame = frames(IDLE_RANGE[0]);
+  const idleLocalRange = [0, frames(IDLE_RANGE[1] - IDLE_RANGE[0])];
+  const idle = new AnimationGroup(`catModelIdle-${index}`, scene);
+  for (const targeted of base.targetedAnimations) {
+    if (!targeted.animation) continue;
+    const animation = targeted.animation.clone(true);
+    for (const key of animation.getKeys()) key.frame -= idleStartFrame;
+    animation.loopMode = Animation.ANIMATIONLOOPMODE_YOYO;
+    idle.addTargetedAnimation(animation, targeted.target);
+  }
   const walk = base.clone(`catModelWalk-${index}`, undefined, true);
-  const groups = [base, idleA, idleB, walk];
+  const groups = [base, idle, walk];
 
   let state = 'none';
   let sad = false;
@@ -132,33 +139,11 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
   let current = null;
   /** @type {{from: any, to: any, t: number, dur: number}|null} */
   let fade = null;
-  let idleSpeed = SPEED_SCALE;
-  let idleDurationMs = 0;
-  let idleTimer = Number.POSITIVE_INFINITY;
-
-  function isIdle(group) {
-    return group === idleA || group === idleB;
-  }
-
-  function nextIdle() {
-    return current === idleA ? idleB : idleA;
-  }
-
-  /** Re-arm the seam timer for an idle instance starting now. */
-  function setIdleTiming(speedRatio) {
-    idleSpeed = speedRatio;
-    idleDurationMs =
-      ((IDLE_RANGE[1] - IDLE_RANGE[0]) * 1000) / Math.max(speedRatio, 1e-4);
-    // Start the seam blend SEAM_MS before the end (plus a safety margin),
-    // so the clip never visibly jumps back to frame 0 while at weight 1.
-    idleTimer = Math.max(0, idleDurationMs - SEAM_MS - SEAM_MARGIN_MS);
-  }
 
   function stopAll() {
     fade = null;
     current = null;
     state = 'none';
-    idleTimer = Number.POSITIVE_INFINITY;
     for (const group of groups) {
       group.stop();
       group.weight = 1;
@@ -202,7 +187,6 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     state = nextState;
     startGroup(group, speedRatio, range);
     current = group;
-    if (isIdle(group)) setIdleTiming(speedRatio);
     if (!prev || prev === group) {
       group.weight = 1;
       return;
@@ -210,26 +194,13 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
     fade = { from: prev, to: group, t: 0, dur: fadeMs };
   }
 
-  /** End-of-idle blend: the current idle → the other idle's first frame. */
-  function seamIdle() {
-    if (!enabled || !isIdle(current)) return;
-    const prev = current;
-    const next = prev === idleA ? idleB : idleA;
-    startGroup(next, idleSpeed, IDLE_RANGE);
-    current = next;
-    state = 'idle';
-    setIdleTiming(idleSpeed);
-    fade = { from: prev, to: next, t: 0, dur: SEAM_MS };
-  }
-
   function startIdle(speed = 1) {
     if (!enabled) return;
     stopAll();
     state = 'idle';
-    current = idleA;
-    startGroup(idleA, speed * SPEED_SCALE, IDLE_RANGE);
-    setIdleTiming(speed * SPEED_SCALE);
-    idleA.weight = 1;
+    current = idle;
+    startGroup(idle, speed * SPEED_SCALE, idleLocalRange);
+    idle.weight = 1;
   }
 
   function applyLook() {
@@ -238,23 +209,15 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
   }
 
   // Babylon blends weighted animatables when the scene renders; drive the
-  // idle/walk cross-fades and the idle seam from the same frame loop.
+  // idle/walk cross-fade from the same frame loop.
   const fadeObserver = scene.onBeforeRenderObservable.add(() => {
-    const dt = scene.getEngine().getDeltaTime();
-    if (fade) {
-      fade.t += dt;
-      const k = Math.min(1, fade.t / fade.dur);
-      const e = k * k * (3 - 2 * k);
-      fade.from.weight = 1 - e;
-      fade.to.weight = e;
-      if (k >= 1) finishFade();
-    }
-    // Keep the seam timer running during an idle fade too, so the next
-    // seam still lands just before the clip's own end.
-    if (isIdle(current)) {
-      idleTimer -= dt;
-      if (!fade && idleTimer <= 0) seamIdle();
-    }
+    if (!fade) return;
+    fade.t += scene.getEngine().getDeltaTime();
+    const k = Math.min(1, fade.t / fade.dur);
+    const e = k * k * (3 - 2 * k);
+    fade.from.weight = 1 - e;
+    fade.to.weight = e;
+    if (k >= 1) finishFade();
   });
 
   return {
@@ -263,13 +226,7 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
 
     /** Blend back into the idle clip (idempotent). */
     playIdle() {
-      if (!enabled) return;
-      if (isIdle(current)) {
-        state = 'idle';
-        return;
-      }
-      idleSpeed = SPEED_SCALE;
-      fadeTo(nextIdle(), idleSpeed, IDLE_RANGE, 'idle');
+      fadeTo(idle, SPEED_SCALE, idleLocalRange, 'idle');
     },
 
     /**
@@ -298,18 +255,7 @@ function instantiate(scene, container, index, parent, baseScale, footLocalY) {
       sad = true;
       applyLook();
       if (!enabled) return;
-      const slow = 0.35 * SPEED_SCALE;
-      if (isIdle(current)) {
-        if (idleSpeed !== slow) {
-          // Preserve the remaining clip frames when the speed changes.
-          idleTimer *= idleSpeed / slow;
-          idleSpeed = slow;
-          current.speedRatio = slow;
-        }
-        state = 'lose';
-        return;
-      }
-      fadeTo(nextIdle(), slow, IDLE_RANGE, 'lose');
+      fadeTo(idle, 0.35 * SPEED_SCALE, idleLocalRange, 'lose');
     },
 
     /** The cat calms down again after a result / rebuild. */
